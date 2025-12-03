@@ -7,7 +7,7 @@ your Netlify function broadcasts an alert.
 ## Getting started
 
 1. Install [Android Studio Hedgehog or newer](https://developer.android.com/studio).
-2. In the Firebase console, open the `soil-sensor-alerts` project and add an
+2. In the Firebase console, open your Firebase project (e.g. `your-project-id`) and add an
    Android app with the package name `com.bearbeneman.soilsensor`. Download the
    generated `google-services.json`.
 3. Copy `google-services.json` into `android/SoilAlertApp/app/`. The file is
