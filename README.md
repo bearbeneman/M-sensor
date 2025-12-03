@@ -17,7 +17,7 @@ This repo now contains both the ESP32 firmware (`Soil sensor.ino`) and the scaff
    - `ALERT_SHARED_SECRET` – must match `ALERT_SHARED_KEY` in `wifi_secrets.h`.
    - `FIREBASE_PROJECT_ID`
    - `FIREBASE_CLIENT_EMAIL`
-   - `FIREBASE_PRIVATE_KEY` (paste the JSON private key, escaping newlines as `\n`, or leave it multi-line in `.env` and let the CLI import it as-is).
+- `FIREBASE_PRIVATE_KEY_BASE64` **or** `FIREBASE_PRIVATE_KEY`. The recommended approach is to base64-encode the private key (no newlines issues) and set `FIREBASE_PRIVATE_KEY_BASE64`. If you prefer the inline key, escape newlines as `\n`.
    - Optional: `FCM_TOPIC` (default `soil-alerts`) and `ALERT_COOLDOWN_MS` (default 20000 ms) to control topic/cooldown behaviour.
 5. Link the local folder to your Netlify site (once): `netlify link --id <your-site-id>`.
 6. Deploy: `git push` and Netlify will build automatically, or test locally with `npm run dev`.

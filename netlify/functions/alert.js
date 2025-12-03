@@ -7,13 +7,30 @@ const lastStateTimestamps = { low: 0, high: 0 };
 
 let firebaseInitialized = false;
 
+function getPrivateKey() {
+  const base64 = process.env.FIREBASE_PRIVATE_KEY_BASE64;
+  if (base64) {
+    try {
+      return Buffer.from(base64, 'base64').toString('utf8');
+    } catch (err) {
+      console.error('Failed to decode base64 private key', err);
+      throw new Error('Invalid base64 private key');
+    }
+  }
+  const inline = process.env.FIREBASE_PRIVATE_KEY;
+  if (inline) {
+    return inline.replace(/\\n/g, '\n');
+  }
+  throw new Error('Firebase private key not configured');
+}
+
 function initFirebase() {
   if (firebaseInitialized) return;
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
+  const privateKeyRaw = getPrivateKey();
 
-  if (!projectId || !clientEmail || !privateKeyRaw) {
+  if (!projectId || !clientEmail) {
     throw new Error('Firebase credentials are missing');
   }
 
@@ -21,7 +38,7 @@ function initFirebase() {
     credential: admin.credential.cert({
       projectId,
       clientEmail,
-      privateKey: privateKeyRaw.replace(/\\n/g, '\n')
+      privateKey: privateKeyRaw
     })
   });
 
