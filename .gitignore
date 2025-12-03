@@ -1,0 +1,15 @@
+# Build artifacts
+.pio/
+.pioenvs/
+.vscode/
+*.elf
+*.bin
+*.map
+.DS_Store
+
+# Secrets
+include/wifi_secrets.h
+
+
+# Local Netlify folder
+.netlify
