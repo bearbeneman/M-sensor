@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">Soil Alert</string>
+    <string name="app_description">Subscribe to the soil-alerts topic to receive ESP32 push notifications.</string>
+    <string name="topic_label">Topic</string>
+    <string name="token_label">FCM token</string>
+    <string name="subscribe_button">Subscribe to topic</string>
+    <string name="subscription_success">Subscribed to soil-alerts</string>
+    <string name="subscription_failed">Subscription failed</string>
+    <string name="notification_default_title">Soil alert</string>
+    <string name="notification_default_body">Check the soil sensor dashboard for details.</string>
+    <string name="channel_name">Soil alerts</string>
+    <string name="channel_description">Instant alerts from the ESP32 soil sensor</string>
+</resources>
+

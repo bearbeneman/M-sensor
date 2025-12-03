@@ -7,6 +7,7 @@
     "build": "echo \"No build step required\""
   },
   "dependencies": {
+    "@netlify/blobs": "^10.4.1",
     "firebase-admin": "^12.6.0",
     "netlify": "^13.3.0"
   }

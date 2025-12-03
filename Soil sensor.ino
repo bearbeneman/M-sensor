@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <WebServer.h>
 #include <Preferences.h>
 #include <SPIFFS.h>
@@ -10,7 +11,13 @@
 const char* ssid     = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 const char* hostName = "soilmonitor";
+
+const char* ALERT_WEBHOOK_HOST = "soil-sensor.netlify.app";
+const char* ALERT_WEBHOOK_PATH = "/.netlify/functions/alert";
 const unsigned long WIFI_RETRY_INTERVAL_MS = 30000;
+const unsigned long ALERT_COOLDOWN_MS = 20000;
+const int ALERT_LOW_THRESHOLD = 30;
+const int ALERT_HIGH_THRESHOLD = 80;
 
 // Defaults for alerts
 const uint32_t NOTIF_COOLDOWN_DEFAULT_MS = 5 * 60 * 1000;
@@ -54,6 +61,15 @@ uint16_t minuteSamples     = 0;
 unsigned long lastWiFiAttempt = 0;
 bool wifiConnected = false;
 bool mdnsStarted   = false;
+
+enum AlertState {
+  ALERT_NORMAL,
+  ALERT_LOW,
+  ALERT_HIGH
+};
+
+AlertState lastRemoteAlertState = ALERT_NORMAL;
+unsigned long lastRemoteAlertMillis = 0;
 
 // ---------------- Live data globals ----------------
 int   lastRaw           = 0;
@@ -980,6 +996,71 @@ void handleMinuteAggregation(uint32_t epoch, uint8_t moisture) {
   minuteSamples++;
 }
 
+void sendAlertWebhook(const char* state, int moisture) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  client.setTimeout(5000);
+
+  if (!client.connect(ALERT_WEBHOOK_HOST, 443)) {
+    Serial.println("Alert webhook: connection failed");
+    return;
+  }
+
+  String payload = "{\"secret\":\"";
+  payload += ALERT_SHARED_KEY;
+  payload += "\",\"state\":\"";
+  payload += state;
+  payload += "\",\"moisture\":";
+  payload += moisture;
+  payload += "}";
+
+  client.println(String("POST ") + ALERT_WEBHOOK_PATH + " HTTP/1.1");
+  client.println(String("Host: ") + ALERT_WEBHOOK_HOST);
+  client.println("Content-Type: application/json");
+  client.println("Connection: close");
+  client.println("Content-Length: " + String(payload.length()));
+  client.println();
+  client.print(payload);
+
+  unsigned long start = millis();
+  while (client.connected() && !client.available() && millis() - start < 5000) {
+    delay(10);
+  }
+  while (client.available()) {
+    client.read();
+  }
+}
+
+void updateRemoteAlertState(int moisture) {
+  AlertState nextState = ALERT_NORMAL;
+  if (moisture <= ALERT_LOW_THRESHOLD) {
+    nextState = ALERT_LOW;
+  } else if (moisture >= ALERT_HIGH_THRESHOLD) {
+    nextState = ALERT_HIGH;
+  }
+
+  unsigned long nowMs = millis();
+
+  if (nextState == ALERT_NORMAL) {
+    lastRemoteAlertState = ALERT_NORMAL;
+    return;
+  }
+
+  bool stateChanged = nextState != lastRemoteAlertState;
+  bool cooledDown = (nowMs - lastRemoteAlertMillis) >= ALERT_COOLDOWN_MS;
+
+  if (stateChanged || cooledDown) {
+    const char* stateLabel = (nextState == ALERT_LOW) ? "low" : "high";
+    sendAlertWebhook(stateLabel, moisture);
+    lastRemoteAlertState = nextState;
+    lastRemoteAlertMillis = nowMs;
+  }
+}
+
 void onWiFiConnected() {
   wifiConnected = true;
   Serial.println("Wi-Fi connected!");
@@ -1088,6 +1169,7 @@ void updateSensorIfNeeded() {
   time(&nowEpoch);
   uint32_t t32 = (nowEpoch > 0) ? (uint32_t)nowEpoch : 0;
   handleMinuteAggregation(t32, (uint8_t)lastMoisture);
+  updateRemoteAlertState(lastMoisture);
 }
 
 // ------------- HTTP handlers -------------
