@@ -12,5 +12,26 @@
     <string name="channel_description">Instant alerts from the ESP32 soil sensor</string>
     <string name="notification_permission_granted">Notifications enabled</string>
     <string name="notification_permission_denied">Notifications blocked</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_online">Online</string>
+    <string name="status_offline">Offline</string>
+    <string name="raw_default">Raw ADC: %1$s</string>
+    <string name="time_default">Last update: %1$s</string>
+    <string name="ip_default">Wi-Fi IP: %1$s</string>
+    <string name="cal_default">Calibration: -- / --</string>
+    <string name="interval_default">Interval: %1$s</string>
+    <string name="history_title">10-day history</string>
+    <string name="history_refresh">Refresh history</string>
+    <string name="alerts_title">Alerts</string>
+    <string name="apply_cooldown">Apply cooldown</string>
+    <string name="open_notification_settings">Open notification settings</string>
+    <string name="calibration_title">Calibration</string>
+    <string name="wet_hint">Wet raw value</string>
+    <string name="dry_hint">Dry raw value</string>
+    <string name="use_current">Use current reading</string>
+    <string name="save_calibration">Save calibration</string>
+    <string name="network_title">Network</string>
+    <string name="base_url_hint">ESP32 base URL (e.g. http://soilmonitor.local)</string>
+    <string name="save_base_url">Save base URL</string>
 </resources>
 
