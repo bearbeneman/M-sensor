@@ -158,7 +158,7 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
     }
 
     private companion object {
-        private const val POLL_INTERVAL_MS = 200L
+        private const val POLL_INTERVAL_MS = 500L
         private const val HISTORY_INTERVAL_MS = 60_000L
     }
 }
