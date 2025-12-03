@@ -41,3 +41,7 @@ If you install the Firebase Admin credentials locally (via `.env`) you can run `
 - The app subscribes to the `soil-alerts` FCM topic and shows heads-up notifications using `SoilAlertMessagingService`.
 - If you change the topic name or thresholds in the backend, update `MainActivity.TOPIC` to match.
 
+## Manual test page
+
+`test-alert.html` is a static helper page you can open via Netlify (or locally with `npx serve`) to manually POST to `/.netlify/functions/alert`. It never stores your shared secret—enter it when prompted along with the desired state/moisture values to validate the whole stack without touching the ESP32.
+
