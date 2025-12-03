@@ -7,6 +7,8 @@ import com.bearbeneman.soilsensor.network.SoilService
 import com.bearbeneman.soilsensor.network.model.ConfigResponse
 import com.bearbeneman.soilsensor.network.model.HistoryResponse
 import com.bearbeneman.soilsensor.network.model.LiveDataResponse
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,9 +38,13 @@ class SoilRepository private constructor(context: Context) {
             })
             .build()
 
+        val moshi = Moshi.Builder()
+            .add(KotlinJsonAdapterFactory())
+            .build()
+
         service = Retrofit.Builder()
             .baseUrl("http://localhost/")
-            .addConverterFactory(MoshiConverterFactory.create())
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
             .client(client)
             .build()
             .create(SoilService::class.java)
