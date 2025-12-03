@@ -215,7 +215,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="@string/alerts_toggle_label" />
+                    android:text="@string/alerts_toggle_label"
+                    android:textOn="@string/alerts_toggle_on"
+                    android:textOff="@string/alerts_toggle_off" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"

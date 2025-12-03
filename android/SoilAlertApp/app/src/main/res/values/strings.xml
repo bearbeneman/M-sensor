@@ -24,6 +24,8 @@
     <string name="history_refresh">Refresh history</string>
     <string name="alerts_title">Alerts</string>
     <string name="alerts_toggle_label">Enable push alerts</string>
+    <string name="alerts_toggle_on">On</string>
+    <string name="alerts_toggle_off">Off</string>
     <string name="apply_cooldown">Apply cooldown</string>
     <string name="open_notification_settings">Open notification settings</string>
     <string name="calibration_title">Calibration</string>
