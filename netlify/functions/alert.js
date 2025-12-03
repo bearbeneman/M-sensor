@@ -80,7 +80,14 @@ exports.handler = async (event) => {
     initFirebase();
   } catch (err) {
     console.error('Firebase init failed', err);
-    return { statusCode: 500, body: 'Firebase configuration error' };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        ok: false,
+        error: 'firebase_init_failed',
+        message: err.message || 'Firebase configuration error'
+      })
+    };
   }
 
   const title = state === 'low' ? 'Soil getting dry' : 'Soil saturated';
@@ -99,7 +106,14 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: JSON.stringify({ ok: true }) };
   } catch (err) {
     console.error('FCM send failed', err);
-    return { statusCode: 500, body: 'FCM send failed' };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        ok: false,
+        error: 'fcm_send_failed',
+        message: err.message || 'FCM send failed'
+      })
+    };
   }
 };
 
