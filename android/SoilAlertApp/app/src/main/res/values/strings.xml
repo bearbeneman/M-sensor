@@ -10,5 +10,7 @@
     <string name="notification_default_body">Check the soil sensor dashboard for details.</string>
     <string name="channel_name">Soil alerts</string>
     <string name="channel_description">Instant alerts from the ESP32 soil sensor</string>
+    <string name="notification_permission_granted">Notifications enabled</string>
+    <string name="notification_permission_denied">Notifications blocked</string>
 </resources>
 
