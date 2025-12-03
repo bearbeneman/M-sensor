@@ -40,6 +40,7 @@ If you install the Firebase Admin credentials locally (via `.env`) you can run `
 - Copy your `google-services.json` into `android/SoilAlertApp/app/`, open that folder in Android Studio, and run on a device.
 - The app subscribes to the `soil-alerts` FCM topic and shows heads-up notifications using `SoilAlertMessagingService`.
 - If you change the topic name or thresholds in the backend, update `MainActivity.TOPIC` to match.
+- To build icons, simple adaptive launchers are provided in `res/mipmap*/ic_launcher*.xml`.
 
 ## Manual test page
 
