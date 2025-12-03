@@ -18,3 +18,11 @@ node_modules/
 # Secrets
 include/wifi_secrets.h
 android/**/google-services.json
+android/SoilAlertApp/.gradle/
+android/SoilAlertApp/.idea/
+android/SoilAlertApp/local.properties
+android/SoilAlertApp/**/build/
+android/SoilAlertApp/gradle/
+android/SoilAlertApp/gradlew
+android/SoilAlertApp/gradlew.bat
+netlify_api_list.txt

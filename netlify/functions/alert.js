@@ -1,10 +1,9 @@
 const admin = require('firebase-admin');
-const { getStore } = require('@netlify/blobs');
 
 const COOLDOWN_MS = parseInt(process.env.ALERT_COOLDOWN_MS || '20000', 10);
 const ALERT_TOPIC = process.env.FCM_TOPIC || 'soil-alerts';
 const VALID_STATES = new Set(['low', 'high']);
-const store = getStore({ name: 'alert-state' });
+const lastStateTimestamps = { low: 0, high: 0 };
 
 let firebaseInitialized = false;
 
@@ -29,19 +28,13 @@ function initFirebase() {
   firebaseInitialized = true;
 }
 
-async function shouldThrottle(state) {
-  const key = `last:${state}`;
-  const previous = await store.get(key, { type: 'text' });
-  if (!previous) return { throttled: false, key };
-  const elapsed = Date.now() - Number(previous);
+function shouldThrottle(state) {
+  const previous = lastStateTimestamps[state] || 0;
+  const elapsed = Date.now() - previous;
   if (Number.isNaN(elapsed) || elapsed >= COOLDOWN_MS) {
-    return { throttled: false, key };
+    return { throttled: false };
   }
-  return { throttled: true, key, remaining: COOLDOWN_MS - elapsed };
-}
-
-async function setLastTimestamp(key) {
-  await store.set(key, String(Date.now()));
+  return { throttled: true, remaining: COOLDOWN_MS - elapsed };
 }
 
 exports.handler = async (event) => {
@@ -70,13 +63,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: 'Invalid moisture' };
   }
 
-  let throttleInfo;
-  try {
-    throttleInfo = await shouldThrottle(state);
-  } catch (err) {
-    console.error('Throttle check failed', err);
-    return { statusCode: 500, body: 'Throttle check failed' };
-  }
+  const throttleInfo = shouldThrottle(state);
 
   if (throttleInfo.throttled) {
     return {
@@ -108,7 +95,7 @@ exports.handler = async (event) => {
         moisture: String(numericMoisture)
       }
     });
-    await setLastTimestamp(throttleInfo.key);
+    lastStateTimestamps[state] = Date.now();
     return { statusCode: 200, body: JSON.stringify({ ok: true }) };
   } catch (err) {
     console.error('FCM send failed', err);

@@ -22,7 +22,7 @@ This repo now contains both the ESP32 firmware (`Soil sensor.ino`) and the scaff
 5. Link the local folder to your Netlify site (once): `netlify link --id <your-site-id>`.
 6. Deploy: `git push` and Netlify will build automatically, or test locally with `npm run dev`.
 
-`netlify/functions/alert.js` validates the shared secret, enforces a 20 s cooldown via Netlify Blobs storage, and broadcasts to the FCM topic (`soil-alerts` by default). ESP32 webhooks only need to send `{ secret, state: "low"|"high", moisture }`.
+`netlify/functions/alert.js` validates the shared secret, enforces a 20 s cooldown in-memory (best effort), and broadcasts to the FCM topic (`soil-alerts` by default). ESP32 webhooks only need to send `{ secret, state: "low"|"high", moisture }`.
 
 If you install the Firebase Admin credentials locally (via `.env`) you can run `npm run dev` and POST to `http://localhost:8888/.netlify/functions/alert` for testing.
 
@@ -40,7 +40,6 @@ If you install the Firebase Admin credentials locally (via `.env`) you can run `
 - Copy your `google-services.json` into `android/SoilAlertApp/app/`, open that folder in Android Studio, and run on a device.
 - The app subscribes to the `soil-alerts` FCM topic and shows heads-up notifications using `SoilAlertMessagingService`.
 - If you change the topic name or thresholds in the backend, update `MainActivity.TOPIC` to match.
-- To build icons, simple adaptive launchers are provided in `res/mipmap*/ic_launcher*.xml`.
 
 ## Manual test page
 
