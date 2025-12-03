@@ -58,6 +58,9 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
                             dry = response.dry,
                             intervalMs = response.interval.toLong(),
                             cooldownMs = response.notifCooldown,
+                            alertLow = response.alertLow,
+                            alertHigh = response.alertHigh,
+                            alertsEnabled = response.alertsEnabled,
                             errorMessage = null
                         )
                     }
@@ -119,6 +122,9 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
                         cooldownMs = response.cooldown,
                         wet = response.wet,
                         dry = response.dry,
+                        alertLow = response.alertLow,
+                        alertHigh = response.alertHigh,
+                        alertsEnabled = response.alertsEnabled,
                         isApplyingConfig = false
                     )
                 }
@@ -139,6 +145,9 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
                     it.copy(
                         wet = response.wet,
                         dry = response.dry,
+                        alertLow = response.alertLow,
+                        alertHigh = response.alertHigh,
+                        alertsEnabled = response.alertsEnabled,
                         isApplyingConfig = false
                     )
                 }
@@ -146,6 +155,40 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
             }.onFailure { ex ->
                 _uiState.update { it.copy(isApplyingConfig = false) }
                 _events.emit(UiEvent.Message(ex.message ?: "Calibration failed"))
+            }
+        }
+    }
+
+    fun applyAlertSettings(enabled: Boolean, low: Int, high: Int) {
+        if (low < 0 || high > 100 || low >= high) {
+            viewModelScope.launch {
+                _events.emit(UiEvent.Message("Thresholds must be between 0-100 and low < high"))
+            }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isApplyingConfig = true) }
+            val result = repository.updateConfig(
+                alertLow = low,
+                alertHigh = high,
+                alertsEnabled = enabled
+            )
+            result.onSuccess { response ->
+                _uiState.update {
+                    it.copy(
+                        alertLow = response.alertLow,
+                        alertHigh = response.alertHigh,
+                        alertsEnabled = response.alertsEnabled,
+                        wet = response.wet,
+                        dry = response.dry,
+                        cooldownMs = response.cooldown,
+                        isApplyingConfig = false
+                    )
+                }
+                _events.emit(UiEvent.Message("Alert settings saved"))
+            }.onFailure { ex ->
+                _uiState.update { it.copy(isApplyingConfig = false) }
+                _events.emit(UiEvent.Message(ex.message ?: "Failed to save alert settings"))
             }
         }
     }
@@ -174,6 +217,9 @@ data class DashboardUiState(
     val dry: Int? = null,
     val intervalMs: Long? = null,
     val cooldownMs: Long? = null,
+    val alertLow: Int? = null,
+    val alertHigh: Int? = null,
+    val alertsEnabled: Boolean = true,
     val history: List<HistoryPoint> = emptyList(),
     val errorMessage: String? = null,
     val isHistoryLoading: Boolean = false,

@@ -16,8 +16,8 @@ const char* ALERT_WEBHOOK_HOST = "soil-sensor.netlify.app";
 const char* ALERT_WEBHOOK_PATH = "/.netlify/functions/alert";
 const unsigned long WIFI_RETRY_INTERVAL_MS = 30000;
 const unsigned long ALERT_COOLDOWN_MS = 20000;
-const int ALERT_LOW_THRESHOLD = 30;
-const int ALERT_HIGH_THRESHOLD = 80;
+const int ALERT_LOW_DEFAULT = 30;
+const int ALERT_HIGH_DEFAULT = 80;
 
 // Defaults for alerts
 const uint32_t NOTIF_COOLDOWN_DEFAULT_MS = 5 * 60 * 1000;
@@ -52,6 +52,9 @@ size_t   historyCount = 0;                 // how many valid entries
 size_t   historyIndex = 0;                 // next write index
 bool     spiffsReady   = false;
 uint32_t notifCooldownMs = NOTIF_COOLDOWN_DEFAULT_MS;
+int      alertLowThreshold  = ALERT_LOW_DEFAULT;
+int      alertHighThreshold = ALERT_HIGH_DEFAULT;
+bool     alertsEnabled      = true;
 
 // Minute aggregation (downsample to 1 sample/minute)
 bool     minuteBucketValid = false;
@@ -513,25 +516,25 @@ const char MAIN_page[] PROGMEM = R"rawliteral(
       });
 
       if (coords.length) {
-        chartCtx.beginPath();
-        coords.forEach((pt, idx) => {
-          if (idx === 0) chartCtx.moveTo(pt.x, pt.y);
-          else chartCtx.lineTo(pt.x, pt.y);
-        });
-        chartCtx.lineTo(coords[coords.length - 1].x, padding + plotHeight);
-        chartCtx.lineTo(coords[0].x, padding + plotHeight);
-        chartCtx.closePath();
-        chartCtx.fillStyle = 'rgba(34,197,94,0.15)';
-        chartCtx.fill();
+      chartCtx.beginPath();
+      coords.forEach((pt, idx) => {
+        if (idx === 0) chartCtx.moveTo(pt.x, pt.y);
+        else chartCtx.lineTo(pt.x, pt.y);
+      });
+      chartCtx.lineTo(coords[coords.length - 1].x, padding + plotHeight);
+      chartCtx.lineTo(coords[0].x, padding + plotHeight);
+      chartCtx.closePath();
+      chartCtx.fillStyle = 'rgba(34,197,94,0.15)';
+      chartCtx.fill();
 
-        chartCtx.beginPath();
-        coords.forEach((pt, idx) => {
-          if (idx === 0) chartCtx.moveTo(pt.x, pt.y);
-          else chartCtx.lineTo(pt.x, pt.y);
-        });
-        chartCtx.strokeStyle = 'rgba(56,189,248,1)';
-        chartCtx.lineWidth = 2;
-        chartCtx.stroke();
+      chartCtx.beginPath();
+      coords.forEach((pt, idx) => {
+        if (idx === 0) chartCtx.moveTo(pt.x, pt.y);
+        else chartCtx.lineTo(pt.x, pt.y);
+      });
+      chartCtx.strokeStyle = 'rgba(56,189,248,1)';
+      chartCtx.lineWidth = 2;
+      chartCtx.stroke();
       }
 
       const lastBase = coords.length ? coords[coords.length - 1] : null;
@@ -566,10 +569,10 @@ const char MAIN_page[] PROGMEM = R"rawliteral(
         chartCtx.arc(lastLive.x, lastLive.y, 3, 0, Math.PI * 2);
         chartCtx.fill();
       } else if (lastBase) {
-        chartCtx.fillStyle = '#22c55e';
-        chartCtx.beginPath();
+      chartCtx.fillStyle = '#22c55e';
+      chartCtx.beginPath();
         chartCtx.arc(lastBase.x, lastBase.y, 3, 0, Math.PI * 2);
-        chartCtx.fill();
+      chartCtx.fill();
       }
 
       chartCtx.textBaseline = 'top';
@@ -1036,10 +1039,15 @@ void sendAlertWebhook(const char* state, int moisture) {
 }
 
 void updateRemoteAlertState(int moisture) {
+  if (!alertsEnabled) {
+    lastRemoteAlertState = ALERT_NORMAL;
+    return;
+  }
+
   AlertState nextState = ALERT_NORMAL;
-  if (moisture <= ALERT_LOW_THRESHOLD) {
+  if (moisture <= alertLowThreshold) {
     nextState = ALERT_LOW;
-  } else if (moisture >= ALERT_HIGH_THRESHOLD) {
+  } else if (moisture >= alertHighThreshold) {
     nextState = ALERT_HIGH;
   }
 
@@ -1189,7 +1197,11 @@ void handleData() {
   json += "\"dry\":"      + String(dryValue)     + ",";
   json += "\"interval\":" + String(READ_INTERVAL_MS) + ",";
   json += "\"maxPoints\":" + String(HISTORY_POINTS) + ",";
-  json += "\"notifCooldown\":" + String(notifCooldownMs);
+  json += "\"notifCooldown\":" + String(notifCooldownMs) + ",";
+  json += "\"alertLow\":" + String(alertLowThreshold) + ",";
+  json += "\"alertHigh\":" + String(alertHighThreshold) + ",";
+  json += "\"alertsEnabled\":";
+  json += (alertsEnabled ? "true" : "false");
   json += "}";
   server.send(200, "application/json", json);
 }
@@ -1240,10 +1252,42 @@ void handleConfig() {
     }
   }
 
+  bool lowArg  = server.hasArg("alertLow");
+  bool highArg = server.hasArg("alertHigh");
+  if (lowArg || highArg) {
+    int requestedLow  = lowArg  ? server.arg("alertLow").toInt()  : alertLowThreshold;
+    int requestedHigh = highArg ? server.arg("alertHigh").toInt() : alertHighThreshold;
+    bool lowValid  = requestedLow  >= 0 && requestedLow  <= 100;
+    bool highValid = requestedHigh >= 0 && requestedHigh <= 100;
+    if (lowValid && highValid && requestedLow < requestedHigh) {
+      if (lowArg && requestedLow != alertLowThreshold) {
+        alertLowThreshold = requestedLow;
+        prefs.putUInt("alertLow", (uint32_t)alertLowThreshold);
+        updated = true;
+      }
+      if (highArg && requestedHigh != alertHighThreshold) {
+        alertHighThreshold = requestedHigh;
+        prefs.putUInt("alertHigh", (uint32_t)alertHighThreshold);
+        updated = true;
+      }
+    }
+  }
+
+  if (server.hasArg("alerts")) {
+    alertsEnabled = server.arg("alerts").toInt() != 0;
+    prefs.putBool("alertsEnabled", alertsEnabled);
+    updated = true;
+  }
+
   String json = "{\"ok\":";
   json += (updated ? "true" : "false");
   json += ",\"wet\":" + String(wetValue) + ",\"dry\":" + String(dryValue);
-  json += ",\"cooldown\":" + String(notifCooldownMs) + "}";
+  json += ",\"cooldown\":" + String(notifCooldownMs);
+  json += ",\"alertLow\":" + String(alertLowThreshold);
+  json += ",\"alertHigh\":" + String(alertHighThreshold);
+  json += ",\"alertsEnabled\":";
+  json += (alertsEnabled ? "true" : "false");
+  json += "}";
   server.send(200, "application/json", json);
 }
 
@@ -1276,6 +1320,9 @@ void setup() {
   wetValue = prefs.getInt("wet", WET_DEFAULT);
   dryValue = prefs.getInt("dry", DRY_DEFAULT);
   notifCooldownMs = prefs.getUInt("cooldown", NOTIF_COOLDOWN_DEFAULT_MS);
+  alertLowThreshold  = (int)prefs.getUInt("alertLow", ALERT_LOW_DEFAULT);
+  alertHighThreshold = (int)prefs.getUInt("alertHigh", ALERT_HIGH_DEFAULT);
+  alertsEnabled      = prefs.getBool("alertsEnabled", true);
 
   Serial.print("Calibration - wet: ");
   Serial.print(wetValue);

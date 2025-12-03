@@ -147,6 +147,15 @@ class MainActivity : AppCompatActivity() {
             val dryValue = dryInput.text?.toString()?.toIntOrNull()
             viewModel.applyCalibration(wetValue, dryValue)
         }
+        saveAlertSettingsButton.setOnClickListener {
+            val low = alertLowInput.text?.toString()?.toIntOrNull()
+            val high = alertHighInput.text?.toString()?.toIntOrNull()
+            if (low == null || high == null) {
+                Snackbar.make(root, R.string.alert_threshold_error, Snackbar.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            viewModel.applyAlertSettings(alertsToggle.isChecked, low, high)
+        }
         wetFromCurrentButton.setOnClickListener {
             latestState?.raw?.let { wetInput.setText(it.toString()) }
         }
@@ -225,6 +234,28 @@ class MainActivity : AppCompatActivity() {
         }
         suppressCooldownListener = false
 
+        if (alertsToggle.isChecked != state.alertsEnabled) {
+            alertsToggle.isChecked = state.alertsEnabled
+        }
+
+        state.alertLow?.let { value ->
+            if (!alertLowInput.isFocused) {
+                val text = alertLowInput.text?.toString()
+                if (text.isNullOrBlank() || text != value.toString()) {
+                    alertLowInput.setText(value.toString())
+                }
+            }
+        }
+
+        state.alertHigh?.let { value ->
+            if (!alertHighInput.isFocused) {
+                val text = alertHighInput.text?.toString()
+                if (text.isNullOrBlank() || text != value.toString()) {
+                    alertHighInput.setText(value.toString())
+                }
+            }
+        }
+
         val currentBase = baseUrlInput.text?.toString()
         if (state.baseUrl.isNotBlank() && state.baseUrl != currentBase) {
             baseUrlInput.setText(state.baseUrl)
@@ -239,6 +270,7 @@ class MainActivity : AppCompatActivity() {
 
         cooldownApplyButton.isEnabled = !state.isApplyingConfig
         saveCalibrationButton.isEnabled = !state.isApplyingConfig
+        saveAlertSettingsButton.isEnabled = !state.isApplyingConfig
     }
 
     private fun updateChart(points: List<HistoryPoint>) {

@@ -210,6 +210,46 @@
                     android:text="@string/alerts_title"
                     android:textStyle="bold" />
 
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/alertsToggle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/alerts_toggle_label" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="@string/alert_low_hint">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/alertLowInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="@string/alert_high_hint">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/alertHighInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <Button
+                    android:id="@+id/saveAlertSettingsButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/save_alert_settings" />
+
                 <Spinner
                     android:id="@+id/cooldownSpinner"
                     android:layout_width="match_parent"

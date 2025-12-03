@@ -19,7 +19,10 @@ interface SoilService {
         @Url url: String,
         @Query("wet") wet: Int? = null,
         @Query("dry") dry: Int? = null,
-        @Query("cooldown") cooldown: Int? = null
+        @Query("cooldown") cooldown: Int? = null,
+        @Query("alertLow") alertLow: Int? = null,
+        @Query("alertHigh") alertHigh: Int? = null,
+        @Query("alerts") alerts: Int? = null
     ): ConfigResponse
 }
 

@@ -72,13 +72,19 @@ class SoilRepository private constructor(context: Context) {
     suspend fun updateConfig(
         wet: Int? = null,
         dry: Int? = null,
-        cooldownMs: Long? = null
+        cooldownMs: Long? = null,
+        alertLow: Int? = null,
+        alertHigh: Int? = null,
+        alertsEnabled: Boolean? = null
     ): Result<ConfigResponse> = runCatching {
         service.updateConfig(
             resolveUrl(PATH_CONFIG),
             wet = wet,
             dry = dry,
-            cooldown = cooldownMs?.toInt()
+            cooldown = cooldownMs?.toInt(),
+            alertLow = alertLow,
+            alertHigh = alertHigh,
+            alerts = alertsEnabled?.let { if (it) 1 else 0 }
         )
     }
 

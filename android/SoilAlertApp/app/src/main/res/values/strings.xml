@@ -23,6 +23,7 @@
     <string name="history_title">10-day history</string>
     <string name="history_refresh">Refresh history</string>
     <string name="alerts_title">Alerts</string>
+    <string name="alerts_toggle_label">Enable push alerts</string>
     <string name="apply_cooldown">Apply cooldown</string>
     <string name="open_notification_settings">Open notification settings</string>
     <string name="calibration_title">Calibration</string>
@@ -33,5 +34,9 @@
     <string name="network_title">Network</string>
     <string name="base_url_hint">ESP32 base URL (e.g. http://soilmonitor.local)</string>
     <string name="save_base_url">Save base URL</string>
+    <string name="alert_low_hint">Low threshold (%)</string>
+    <string name="alert_high_hint">High threshold (%)</string>
+    <string name="save_alert_settings">Save alert settings</string>
+    <string name="alert_threshold_error">Thresholds must be 0-100 and low &lt; high</string>
 </resources>
 
