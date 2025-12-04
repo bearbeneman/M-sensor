@@ -26,5 +26,9 @@ interface SoilService {
         @Query("name") name: String? = null,
         @Query("clearHistory") clearHistory: Int? = null
     ): ConfigResponse
+
+    // Remote (cloud) latest reading, backed by Netlify/Firebase.
+    @GET(".netlify/functions/latest")
+    suspend fun fetchLatestRemote(): LiveDataResponse
 }
 

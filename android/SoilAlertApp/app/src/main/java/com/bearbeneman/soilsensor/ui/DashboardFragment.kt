@@ -214,12 +214,13 @@ class DashboardFragment : Fragment() {
     }
 
     private fun updateStatus(status: ConnectionStatus) {
-        val (textRes, color) = when (status) {
-            ConnectionStatus.CONNECTING -> com.bearbeneman.soilsensor.R.string.status_connecting to Color.YELLOW
-            ConnectionStatus.ONLINE -> com.bearbeneman.soilsensor.R.string.status_online to Color.parseColor("#22c55e")
-            ConnectionStatus.OFFLINE -> com.bearbeneman.soilsensor.R.string.status_offline to Color.parseColor("#ef4444")
+        val (text, color) = when (status) {
+            ConnectionStatus.CONNECTING -> getString(com.bearbeneman.soilsensor.R.string.status_connecting) to Color.YELLOW
+            ConnectionStatus.LOCAL -> getString(com.bearbeneman.soilsensor.R.string.status_online) + " · LAN" to Color.parseColor("#22c55e")
+            ConnectionStatus.REMOTE -> getString(com.bearbeneman.soilsensor.R.string.status_online) + " · Cloud" to Color.parseColor("#22c55e")
+            ConnectionStatus.OFFLINE -> getString(com.bearbeneman.soilsensor.R.string.status_offline) to Color.parseColor("#ef4444")
         }
-        binding.statusText.setText(textRes)
+        binding.statusText.text = text
         val drawable = DrawableCompat.wrap(binding.statusDot.background)
         DrawableCompat.setTint(drawable, color)
         binding.statusDot.background = drawable

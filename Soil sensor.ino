@@ -4,23 +4,47 @@
 #include <Preferences.h>
 #include <SPIFFS.h>
 #include <ESPmDNS.h>
+#include <DNSServer.h>
 #include "time.h"
 #include "include/wifi_secrets.h"
 
-// ---------------- Wi-Fi settings ----------------
-const char* ssid     = WIFI_SSID;
-const char* password = WIFI_PASSWORD;
+// ---------------- Wi-Fi + provisioning settings ----------------
+//
+// Wi-Fi credentials are no longer compiled into the firmware.
+// Instead, they are stored in NVS (Preferences, namespace "soilmon")
+// under keys "wifi_ssid" and "wifi_pass".
+//
+// On boot:
+//   - If stored credentials exist → connect as Wi-Fi STA.
+//   - If they are missing or connection fails → start a setup AP
+//     called "SoilSensor-Setup" that serves a Wi-Fi config page.
+//
+// A long-press on FACTORY_RESET_PIN clears stored Wi-Fi details
+// and forces the device back to setup mode.
+//
+String wifiSsid;
+String wifiPassword;
 const char* hostName = "soilmonitor";
 
 const char* ALERT_WEBHOOK_HOST = "soil-sensor.netlify.app";
 const char* ALERT_WEBHOOK_PATH = "/.netlify/functions/alert";
+
 const unsigned long WIFI_RETRY_INTERVAL_MS = 30000;
-const unsigned long ALERT_COOLDOWN_MS = 20000;
-const int ALERT_LOW_DEFAULT = 30;
-const int ALERT_HIGH_DEFAULT = 80;
+const unsigned long ALERT_COOLDOWN_MS      = 20000;
+const int ALERT_LOW_DEFAULT                = 30;
+const int ALERT_HIGH_DEFAULT               = 80;
 
 // Defaults for alerts
-const uint32_t NOTIF_COOLDOWN_DEFAULT_MS = 5 * 60 * 1000;
+const uint32_t NOTIF_COOLDOWN_DEFAULT_MS   = 5 * 60 * 1000;
+
+// Factory-reset button (hold low for FACTORY_RESET_HOLD_MS to clear Wi-Fi)
+// On many ESP32 dev boards the BOOT button is GPIO0 and is active-low.
+// Hold duration is ~20 seconds to avoid accidental wipes.
+const int FACTORY_RESET_PIN                = 0;
+const unsigned long FACTORY_RESET_HOLD_MS  = 20UL * 1000UL;
+
+// Simple status LED for reset feedback (GPIO2 is the on-board LED on many dev boards)
+const int STATUS_LED_PIN                   = 2;
 
 // ---------------- NTP / time ----------------
 const char* ntpServer      = "pool.ntp.org";
@@ -50,12 +74,23 @@ uint32_t historyTime[HISTORY_POINTS];      // epoch seconds
 uint8_t  historyMoisture[HISTORY_POINTS];  // 0–100 %
 size_t   historyCount = 0;                 // how many valid entries
 size_t   historyIndex = 0;                 // next write index
-bool     spiffsReady   = false;
-uint32_t notifCooldownMs = NOTIF_COOLDOWN_DEFAULT_MS;
+bool     spiffsReady        = false;
+uint32_t notifCooldownMs    = NOTIF_COOLDOWN_DEFAULT_MS;
 int      alertLowThreshold  = ALERT_LOW_DEFAULT;
 int      alertHighThreshold = ALERT_HIGH_DEFAULT;
 bool     alertsEnabled      = true;
 String   sensorName         = "Soil Sensor";
+
+// Provisioning / reset state
+bool provisioningMode             = false;
+unsigned long lastWiFiAttempt     = 0;
+bool wifiConnected                = false;
+bool mdnsStarted                  = false;
+unsigned long resetButtonPressedAt = 0;
+
+// Cloud sync (Netlify/Firebase) interval
+const unsigned long CLOUD_POST_INTERVAL_MS = 10UL * 1000UL;
+unsigned long lastCloudPostMillis = 0;
 
 String jsonEscape(const String& input) {
   String output;
@@ -81,9 +116,6 @@ bool     minuteBucketValid = false;
 uint32_t minuteBucket      = 0;
 uint32_t minuteAccum       = 0;
 uint16_t minuteSamples     = 0;
-unsigned long lastWiFiAttempt = 0;
-bool wifiConnected = false;
-bool mdnsStarted   = false;
 
 enum AlertState {
   ALERT_NORMAL,
@@ -116,8 +148,276 @@ unsigned long lastReadMillis = 0;
 // ---------------- System helpers ----------------
 WebServer server(80);
 Preferences prefs;
+DNSServer dnsServer;
 
-// ---------------- HTML + JS (served at "/") ----------------
+// ---------------- Wi-Fi config helpers ----------------
+
+void loadWiFiConfig() {
+  // prefs.begin() is called in setup(), so we can safely use it here after that.
+  wifiSsid = prefs.getString("wifi_ssid", "");
+  wifiPassword = prefs.getString("wifi_pass", "");
+}
+
+bool hasWiFiConfig() {
+  return wifiSsid.length() > 0;
+}
+
+void saveWiFiConfig(const String& ssid, const String& pass) {
+  wifiSsid = ssid;
+  wifiPassword = pass;
+  prefs.putString("wifi_ssid", wifiSsid);
+  prefs.putString("wifi_pass", wifiPassword);
+}
+
+void clearWiFiConfig() {
+  wifiSsid = "";
+  wifiPassword = "";
+  prefs.remove("wifi_ssid");
+  prefs.remove("wifi_pass");
+}
+
+// ---------------- HTML (Wi-Fi setup portal, served when provisioning) ----------------
+const char SETUP_page[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Soil Sensor – Wi‑Fi setup</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      padding: 1.75rem 1.25rem;
+      font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",
+                   Roboto,Helvetica,Arial,sans-serif;
+      background: radial-gradient(circle at top,#0f172a,#020617);
+      color: #e5e7eb;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .card {
+      width: 100%;
+      max-width: 430px;
+      background: rgba(15,23,42,0.95);
+      border-radius: 22px;
+      padding: 1.75rem 1.5rem 1.5rem;
+      box-shadow:
+        0 20px 50px rgba(0,0,0,0.65),
+        0 0 0 1px rgba(148,163,184,0.16);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid rgba(34,197,94,0.5);
+      font-size: 0.7rem;
+      color: #bbf7d0;
+      background: rgba(22,163,74,0.12);
+    }
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 0 4px rgba(34,197,94,0.25);
+    }
+    h1 {
+      margin: 0.75rem 0 0.3rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.55rem;
+      letter-spacing: 0.02em;
+    }
+    h1 span.icon {
+      display: inline-flex;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.4rem;
+      background: radial-gradient(circle at 30% 0,#22c55e,#16a34a);
+      box-shadow: 0 0 0 1px rgba(74,222,128,0.65);
+    }
+    .subtitle {
+      margin: 0 0 1.1rem;
+      font-size: 0.85rem;
+      color: #9ca3af;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+    label {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      margin-bottom: 0.25rem;
+      display: block;
+    }
+    input {
+      width: 100%;
+      padding: 0.45rem 0.55rem;
+      border-radius: 10px;
+      border: 1px solid rgba(148,163,184,0.9);
+      background: rgba(15,23,42,0.9);
+      color: #e5e7eb;
+      font-size: 0.9rem;
+      box-sizing: border-box;
+    }
+    input:focus {
+      outline: none;
+      border-color: rgba(59,130,246,0.95);
+      box-shadow: 0 0 0 1px rgba(59,130,246,0.6);
+    }
+    .hint {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: 0.3rem;
+    }
+    .button-row {
+      margin-top: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+    }
+    .primary {
+      background: linear-gradient(90deg,#22c55e,#16a34a);
+      color: #022c22;
+      box-shadow: 0 12px 25px rgba(22,163,74,0.45);
+    }
+    .secondary {
+      background: rgba(15,23,42,0.9);
+      color: #e5e7eb;
+      border: 1px solid rgba(148,163,184,0.5);
+    }
+    .footer {
+      margin-top: 1.1rem;
+      font-size: 0.72rem;
+      color: #6b7280;
+    }
+    .footer strong {
+      color: #e5e7eb;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="badge">
+      <span class="badge-dot"></span>
+      Setup mode
+    </span>
+    <h1><span class="icon">🌱</span>Soil Sensor</h1>
+    <p class="subtitle">
+      Connect the device to your home Wi‑Fi so it can publish readings
+      and send alerts.
+    </p>
+
+    <form method="POST" action="/wifi">
+      <div>
+        <label for="ssid">Wi‑Fi network</label>
+        <select id="ssidSelect" style="margin-bottom:0.4rem;width:100%;padding:0.45rem 0.55rem;border-radius:10px;border:1px solid rgba(148,163,184,0.9);background:rgba(15,23,42,0.9);color:#e5e7eb;font-size:0.9rem;box-sizing:border-box;">
+          <option value="">Scanning for networks…</option>
+        </select>
+        <input id="ssid" name="ssid" autocomplete="off" required placeholder="Or enter network name">
+        <p class="hint" id="ssidHint"></p>
+      </div>
+      <div>
+        <label for="pass">Wi‑Fi password</label>
+        <input id="pass" name="pass" type="password" autocomplete="off" required>
+        <p class="hint">
+          Your details are stored locally on this ESP32 and never leave your network.
+        </p>
+      </div>
+      <div class="button-row">
+        <button type="submit" class="primary">
+          Save &amp; connect
+        </button>
+        <button type="button" class="secondary" onclick="window.location.reload()">
+          Retry connection
+        </button>
+      </div>
+    </form>
+
+    <p class="footer">
+      <strong>Tip:</strong> To wipe Wi‑Fi details later, hold the on‑board button
+      for about 10&nbsp;seconds until the device restarts back into setup mode.
+    </p>
+  </div>
+
+  <script>
+    function setSsidField(value) {
+      var input = document.getElementById('ssid');
+      if (input) {
+        input.value = value || '';
+      }
+    }
+
+    async function scanNetworks() {
+      var select = document.getElementById('ssidSelect');
+      var hint = document.getElementById('ssidHint');
+      if (!select) return;
+      try {
+        var res = await fetch('/scan');
+        if (!res.ok) {
+          select.innerHTML = '<option value=\"\">Scan failed</option>';
+          if (hint) hint.textContent = 'Could not scan networks. You can still type the name manually.';
+          return;
+        }
+        var data = await res.json();
+        var nets = (data.networks || []).filter(function (n) { return n && n.ssid; });
+        if (!nets.length) {
+          select.innerHTML = '<option value=\"\">No networks found</option>';
+          if (hint) hint.textContent = 'No Wi‑Fi networks detected nearby. You can still enter the SSID manually.';
+          return;
+        }
+        nets.sort(function (a, b) { return (b.rssi || 0) - (a.rssi || 0); });
+        var options = '<option value=\"\">Choose a network…</option>';
+        for (var i = 0; i < nets.length; i++) {
+          var ssid = nets[i].ssid;
+          var rssi = nets[i].rssi;
+          options += '<option value=\"' + ssid + '\">' + ssid + ' (' + rssi + ' dBm)</option>';
+        }
+        select.innerHTML = options;
+        if (hint) hint.textContent = 'Pick a network from the list or type its name manually.';
+      } catch (e) {
+        select.innerHTML = '<option value=\"\">Scan error</option>';
+        if (hint) hint.textContent = 'Scanning failed; you can still type the network name.';
+      }
+
+      select.onchange = function () {
+        setSsidField(select.value);
+      };
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      scanNetworks();
+    });
+  </script>
+</body>
+</html>
+)rawliteral";
+
+// ---------------- HTML + JS (main dashboard, served when Wi‑Fi is configured) ----------------
 const char MAIN_page[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -1070,6 +1370,63 @@ void sendAlertWebhook(const char* state, int moisture) {
   }
 }
 
+// Send the latest reading to the Netlify/Firebase backend so that
+// remote clients can see the current state even when not on the LAN.
+void sendCloudReading() {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  client.setTimeout(5000);
+
+  // Reuse the same host; use a dedicated ingest function path.
+  const char* CLOUD_INGEST_PATH = "/.netlify/functions/ingest";
+
+  if (!client.connect(ALERT_WEBHOOK_HOST, 443)) {
+    Serial.println("Cloud ingest: connection failed");
+    return;
+  }
+
+  // Build JSON payload mirroring /data response plus secret for auth.
+  String payload = "{";
+  payload += "\"secret\":\"";
+  payload += ALERT_SHARED_KEY;
+  payload += "\",";
+  payload += "\"name\":\"" + jsonEscape(sensorName) + "\",";
+  payload += "\"raw\":" + String(lastRaw) + ",";
+  payload += "\"moisture\":" + String(lastMoisture) + ",";
+  payload += "\"time\":\"" + getTimeString() + "\",";
+  payload += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
+  payload += "\"wet\":" + String(wetValue) + ",";
+  payload += "\"dry\":" + String(dryValue) + ",";
+  payload += "\"interval\":" + String(READ_INTERVAL_MS) + ",";
+  payload += "\"maxPoints\":" + String(HISTORY_POINTS) + ",";
+  payload += "\"notifCooldown\":" + String(notifCooldownMs) + ",";
+  payload += "\"alertLow\":" + String(alertLowThreshold) + ",";
+  payload += "\"alertHigh\":" + String(alertHighThreshold) + ",";
+  payload += "\"alertsEnabled\":";
+  payload += (alertsEnabled ? "true" : "false");
+  payload += "}";
+
+  client.println(String("POST ") + CLOUD_INGEST_PATH + " HTTP/1.1");
+  client.println(String("Host: ") + ALERT_WEBHOOK_HOST);
+  client.println("Content-Type: application/json");
+  client.println("Connection: close");
+  client.println("Content-Length: " + String(payload.length()));
+  client.println();
+  client.print(payload);
+
+  unsigned long start = millis();
+  while (client.connected() && !client.available() && millis() - start < 5000) {
+    delay(10);
+  }
+  while (client.available()) {
+    client.read();
+  }
+}
+
 void updateRemoteAlertState(int moisture) {
   if (!alertsEnabled) {
     lastRemoteAlertState = ALERT_NORMAL;
@@ -1128,15 +1485,24 @@ void onWiFiDisconnected() {
 }
 
 void beginWiFiConnection() {
+  if (!hasWiFiConfig()) {
+    Serial.println("No stored Wi-Fi credentials; skipping STA connect.");
+    return;
+  }
+  provisioningMode = false;
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(hostName);
-  WiFi.begin(ssid, password);
+  WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
   lastWiFiAttempt = millis();
   Serial.print("Connecting to Wi-Fi ");
-  Serial.print(ssid);
+  Serial.print(wifiSsid);
 }
 
 void connectWiFiBlocking() {
+  if (!hasWiFiConfig()) {
+    Serial.println("No stored Wi-Fi credentials; cannot connect.");
+    return;
+  }
   beginWiFiConnection();
   int retries = 0;
   while (WiFi.status() != WL_CONNECTED && retries < 60) {
@@ -1153,6 +1519,12 @@ void connectWiFiBlocking() {
 }
 
 void ensureWiFi() {
+  // When in provisioning mode we intentionally stay in AP mode and do not
+  // attempt STA reconnection in the background.
+  if (provisioningMode) {
+    return;
+  }
+
   if (WiFi.status() == WL_CONNECTED) {
     if (!wifiConnected) {
       onWiFiConnected();
@@ -1210,14 +1582,32 @@ void updateSensorIfNeeded() {
   uint32_t t32 = (nowEpoch > 0) ? (uint32_t)nowEpoch : 0;
   handleMinuteAggregation(t32, (uint8_t)lastMoisture);
   updateRemoteAlertState(lastMoisture);
+
+  // Periodically push the latest reading to the cloud backend so that
+  // remote clients can see the current state even when not on the LAN.
+  if (wifiConnected) {
+    if (nowMs - lastCloudPostMillis >= CLOUD_POST_INTERVAL_MS) {
+      lastCloudPostMillis = nowMs;
+      sendCloudReading();
+    }
+  }
 }
 
 // ------------- HTTP handlers -------------
 void handleRoot() {
-  server.send_P(200, "text/html", MAIN_page);
+  if (provisioningMode || !hasWiFiConfig()) {
+    server.send_P(200, "text/html", SETUP_page);
+  } else {
+    server.send_P(200, "text/html", MAIN_page);
+  }
 }
 
 void handleData() {
+  if (provisioningMode || !wifiConnected) {
+    // In setup/offline mode we don't have live data to show
+    server.send(503, "application/json", "{\"error\":\"not_configured\"}");
+    return;
+  }
   updateSensorIfNeeded();
 
   String json = "{";
@@ -1240,6 +1630,10 @@ void handleData() {
 }
 
 void handleHistory() {
+  if (provisioningMode || !wifiConnected) {
+    server.send(503, "application/json", "{\"error\":\"not_configured\"}");
+    return;
+  }
   String json = "{\"maxPoints\":" + String(HISTORY_POINTS) + ",\"points\":[";
   for (size_t i = 0; i < historyCount; ++i) {
     size_t idx = (historyIndex + HISTORY_POINTS - historyCount + i) % HISTORY_POINTS;
@@ -1256,6 +1650,10 @@ void handleHistory() {
 
 // Save calibration from query string (?wet=1234&dry=3456)
 void handleConfig() {
+  if (provisioningMode || !wifiConnected) {
+    server.send(503, "application/json", "{\"ok\":false,\"reason\":\"not_configured\"}");
+    return;
+  }
   bool updated = false;
   bool historyCleared = false;
 
@@ -1344,12 +1742,87 @@ void handleConfig() {
   server.send(200, "application/json", json);
 }
 
+// Scan nearby Wi‑Fi networks and return as JSON for the setup portal.
+void handleScanNetworks() {
+  if (!(provisioningMode || !hasWiFiConfig())) {
+    server.send(404, "application/json", "{\"error\":\"not_in_setup\"}");
+    return;
+  }
+
+  int n = WiFi.scanNetworks(/*async=*/false, /*show_hidden=*/true);
+  String json = "{\"networks\":[";
+  bool first = true;
+  if (n > 0) {
+    for (int i = 0; i < n; ++i) {
+      String ssid = WiFi.SSID(i);
+      if (ssid.length() == 0) continue;
+      if (!first) json += ",";
+      first = false;
+      json += "{\"ssid\":\"";
+      json += jsonEscape(ssid);
+      json += "\",\"rssi\":";
+      json += String(WiFi.RSSI(i));
+      json += "}";
+    }
+  }
+  json += "]}";
+  WiFi.scanDelete();
+  server.send(200, "application/json", json);
+}
+
+// Handle Wi-Fi setup POST from the provisioning page
+void handleWiFiSetup() {
+  if (!server.hasArg("ssid") || !server.hasArg("pass")) {
+    server.send(400, "text/plain", "Missing ssid or pass");
+    return;
+  }
+
+  String ssid = server.arg("ssid");
+  String pass = server.arg("pass");
+  ssid.trim();
+  pass.trim();
+
+  if (ssid.length() == 0) {
+    server.send(400, "text/plain", "SSID must not be empty");
+    return;
+  }
+
+  saveWiFiConfig(ssid, pass);
+
+  String html = "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+                "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+                "<title>Soil Sensor – saved</title></head><body style='"
+                "font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;"
+                "background:#020617;color:#e5e7eb;display:flex;align-items:center;justify-content:center;"
+                "min-height:100vh;margin:0;'><div style='max-width:420px;padding:1.5rem;background:#020617;"
+                "border-radius:20px;border:1px solid rgba(148,163,184,0.3);box-shadow:0 22px 45px rgba(0,0,0,0.6);'>"
+                "<h1 style='font-size:1.4rem;margin:0 0 .5rem;'>Wi‑Fi saved</h1>"
+                "<p style='font-size:.9rem;color:#9ca3af;margin:0 0 .75rem;'>"
+                "The soil sensor will restart and try to join <strong>" + jsonEscape(ssid) + "</strong>."
+                "</p><p style='font-size:.8rem;color:#6b7280;margin:0;'>"
+                "You can now disconnect from the setup network. Once the LED indicates it is online, "
+                "open the main dashboard page from your LAN."
+                "</p></div></body></html>";
+
+  server.send(200, "text/html", html);
+
+  // Give the response a moment to flush, then reboot into STA mode.
+  delay(1000);
+  ESP.restart();
+}
+
 void handleFavicon() {
   server.send(204);
 }
 
 void handleNotFound() {
-  server.send(404, "text/plain", "Not found");
+  if (provisioningMode || !hasWiFiConfig()) {
+    // Captive-portal style redirect: send everything to the setup page.
+    server.sendHeader("Location", "/", true);
+    server.send(302, "text/plain", "");
+  } else {
+    server.send(404, "text/plain", "Not found");
+  }
 }
 
 // ------------- Setup -------------
@@ -1358,7 +1831,11 @@ void setup() {
   delay(1000);
 
   Serial.println();
-  Serial.println("ESP32 Soil Monitor with Chart.js + calibration");
+  Serial.println("ESP32 Soil Monitor with Wi‑Fi provisioning");
+
+  pinMode(FACTORY_RESET_PIN, INPUT_PULLUP);
+   pinMode(STATUS_LED_PIN, OUTPUT);
+   digitalWrite(STATUS_LED_PIN, LOW);
 
   if (SPIFFS.begin(true)) {
     spiffsReady = true;
@@ -1368,7 +1845,7 @@ void setup() {
     Serial.println("SPIFFS mount failed");
   }
 
-  // Load calibration from NVS (flash)
+  // Load calibration + device settings from NVS (flash)
   prefs.begin("soilmon", false); // namespace "soilmon"
   wetValue = prefs.getInt("wet", WET_DEFAULT);
   dryValue = prefs.getInt("dry", DRY_DEFAULT);
@@ -1378,18 +1855,39 @@ void setup() {
   alertHighThreshold = (int)prefs.getUInt("alertHigh", ALERT_HIGH_DEFAULT);
   alertsEnabled      = prefs.getBool("alertsEnabled", true);
 
+  loadWiFiConfig();
+
   Serial.print("Calibration - wet: ");
   Serial.print(wetValue);
   Serial.print(" dry: ");
   Serial.println(dryValue);
 
-  // Wi-Fi
-  connectWiFiBlocking();
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Starting offline; background retries enabled.");
+  // Decide Wi‑Fi mode: STA with stored credentials, or setup AP
+  auto startProvisioningAP = []() {
+    provisioningMode = true;
+    // AP+STA mode so we can still scan nearby networks while hosting the portal.
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.softAP("SoilSensor-Setup");
+    IPAddress apIp = WiFi.softAPIP();
+    // Start a simple DNS server that resolves all hostnames to the AP IP,
+    // so users can type any address (e.g. http://soil.setup) and land here.
+    dnsServer.start(53, "*", apIp);
+    Serial.print("Setup AP started. Connect to SSID \"SoilSensor-Setup\" and open http://soil.setup or http://");
+    Serial.println(apIp);
+  };
+
+  if (hasWiFiConfig()) {
+    connectWiFiBlocking();
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("Stored Wi‑Fi failed; falling back to setup AP.");
+      startProvisioningAP();
+    }
+  } else {
+    Serial.println("No Wi‑Fi config; starting setup AP.");
+    startProvisioningAP();
   }
 
-  // Time via NTP
+  // Time via NTP (will succeed once STA Wi‑Fi is up)
   configTime(gmtOffset_sec, daylightOffset, ntpServer);
   Serial.println("NTP time requested…");
 
@@ -1398,6 +1896,8 @@ void setup() {
   server.on("/data", handleData);
   server.on("/history", handleHistory);
   server.on("/config", handleConfig);
+  server.on("/scan", handleScanNetworks);
+  server.on("/wifi", HTTP_ANY, handleWiFiSetup);
   server.on("/favicon.ico", handleFavicon);
   server.onNotFound(handleNotFound);
   server.begin();
@@ -1409,6 +1909,37 @@ void setup() {
 
 // ------------- Main loop -------------
 void loop() {
+  // Handle captive-portal DNS while in provisioning mode
+  if (provisioningMode) {
+    dnsServer.processNextRequest();
+  }
+
+  // Check for long-press on factory reset button
+  int buttonState = digitalRead(FACTORY_RESET_PIN);
+  unsigned long now = millis();
+  if (buttonState == LOW) { // active-low
+    if (resetButtonPressedAt == 0) {
+      // Start measuring hold time; keep LED off until threshold is hit.
+      resetButtonPressedAt = now;
+      digitalWrite(STATUS_LED_PIN, LOW);
+    } else if (now - resetButtonPressedAt >= FACTORY_RESET_HOLD_MS) {
+      Serial.println("Factory reset button held long enough; clearing Wi‑Fi config.");
+      // Distinct confirmation blink sequence (about 3 seconds)
+      for (int i = 0; i < 10; ++i) {
+        digitalWrite(STATUS_LED_PIN, HIGH);
+        delay(150);
+        digitalWrite(STATUS_LED_PIN, LOW);
+        delay(150);
+      }
+      clearWiFiConfig();
+      delay(200);
+      ESP.restart();
+    }
+  } else {
+    resetButtonPressedAt = 0;
+    digitalWrite(STATUS_LED_PIN, LOW);
+  }
+
   ensureWiFi();
   updateSensorIfNeeded();
   server.handleClient();

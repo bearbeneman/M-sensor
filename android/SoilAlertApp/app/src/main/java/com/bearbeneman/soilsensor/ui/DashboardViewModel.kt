@@ -47,36 +47,70 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
         liveJob?.cancel()
         liveJob = viewModelScope.launch {
             while (true) {
-                val result = repository.fetchLive()
-                result.onSuccess { response ->
-                    appendLiveSample(response.moisture)
-                    _uiState.update {
-                        it.copy(
-                            status = ConnectionStatus.ONLINE,
-                            sensorName = response.name ?: it.sensorName,
-                            moisture = response.moisture,
-                            raw = response.raw,
-                            lastUpdated = response.time,
-                            ip = response.ip,
-                            wet = response.wet,
-                            dry = response.dry,
-                            intervalMs = response.interval.toLong(),
-                            cooldownMs = response.notifCooldown,
-                            alertLow = response.alertLow,
-                            alertHigh = response.alertHigh,
-                            alertsEnabled = response.alertsEnabled,
-                            liveSamples = liveBuffer.toList(),
-                            errorMessage = null
-                        )
+                // First try local ESP32 on the LAN.
+                val localResult = repository.fetchLiveLocal()
+                var usedRemote = false
+
+                localResult
+                    .onSuccess { response ->
+                        appendLiveSample(response.moisture)
+                        _uiState.update {
+                            it.copy(
+                                status = ConnectionStatus.LOCAL,
+                                sensorName = response.name ?: it.sensorName,
+                                moisture = response.moisture,
+                                raw = response.raw,
+                                lastUpdated = response.time,
+                                ip = response.ip,
+                                wet = response.wet,
+                                dry = response.dry,
+                                intervalMs = response.interval.toLong(),
+                                cooldownMs = response.notifCooldown,
+                                alertLow = response.alertLow,
+                                alertHigh = response.alertHigh,
+                                alertsEnabled = response.alertsEnabled,
+                                liveSamples = liveBuffer.toList(),
+                                errorMessage = null
+                            )
+                        }
                     }
-                }.onFailure { ex ->
-                    _uiState.update {
-                        it.copy(
-                            status = ConnectionStatus.OFFLINE,
-                            errorMessage = ex.message ?: "Failed to reach ESP32"
-                        )
+                    .onFailure {
+                        usedRemote = true
+                    }
+
+                if (usedRemote) {
+                    val remoteResult = repository.fetchLiveRemote()
+                    remoteResult.onSuccess { response ->
+                        appendLiveSample(response.moisture)
+                        _uiState.update {
+                            it.copy(
+                                status = ConnectionStatus.REMOTE,
+                                sensorName = response.name ?: it.sensorName,
+                                moisture = response.moisture,
+                                raw = response.raw,
+                                lastUpdated = response.time,
+                                ip = response.ip,
+                                wet = response.wet,
+                                dry = response.dry,
+                                intervalMs = response.interval.toLong(),
+                                cooldownMs = response.notifCooldown,
+                                alertLow = response.alertLow,
+                                alertHigh = response.alertHigh,
+                                alertsEnabled = response.alertsEnabled,
+                                liveSamples = liveBuffer.toList(),
+                                errorMessage = null
+                            )
+                        }
+                    }.onFailure { ex ->
+                        _uiState.update {
+                            it.copy(
+                                status = ConnectionStatus.OFFLINE,
+                                errorMessage = ex.message ?: "Failed to reach ESP32 or cloud backend"
+                            )
+                        }
                     }
                 }
+
                 delay(POLL_INTERVAL_MS)
             }
         }
@@ -295,7 +329,7 @@ data class DashboardUiState(
     val isApplyingConfig: Boolean = false
 )
 
-enum class ConnectionStatus { CONNECTING, ONLINE, OFFLINE }
+enum class ConnectionStatus { CONNECTING, LOCAL, REMOTE, OFFLINE }
 
 sealed interface UiEvent {
     data class Message(val text: String) : UiEvent

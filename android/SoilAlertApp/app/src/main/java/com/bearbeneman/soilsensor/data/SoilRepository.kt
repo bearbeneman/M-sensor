@@ -27,6 +27,7 @@ class SoilRepository private constructor(context: Context) {
     val baseUrl: StateFlow<String> = _baseUrl.asStateFlow()
 
     private val service: SoilService
+    private val remoteService: SoilService
 
     init {
         val client = OkHttpClient.Builder()
@@ -48,6 +49,13 @@ class SoilRepository private constructor(context: Context) {
             .client(client)
             .build()
             .create(SoilService::class.java)
+
+        remoteService = Retrofit.Builder()
+            .baseUrl(REMOTE_BASE_URL)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .client(client)
+            .build()
+            .create(SoilService::class.java)
     }
 
     private fun loadBaseUrl(): String {
@@ -61,8 +69,12 @@ class SoilRepository private constructor(context: Context) {
         _baseUrl.value = normalized
     }
 
-    suspend fun fetchLive(): Result<LiveDataResponse> = runCatching {
+    suspend fun fetchLiveLocal(): Result<LiveDataResponse> = runCatching {
         service.fetchLive(resolveUrl(PATH_LIVE))
+    }
+
+    suspend fun fetchLiveRemote(): Result<LiveDataResponse> = runCatching {
+        remoteService.fetchLatestRemote()
     }
 
     suspend fun fetchHistory(): Result<HistoryResponse> = runCatching {
@@ -115,6 +127,7 @@ class SoilRepository private constructor(context: Context) {
         private const val PATH_LIVE = "data"
         private const val PATH_HISTORY = "history"
         private const val PATH_CONFIG = "config"
+        private const val REMOTE_BASE_URL = "https://soil-sensor.netlify.app/"
 
         @Volatile
         private var INSTANCE: SoilRepository? = null
