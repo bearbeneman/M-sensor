@@ -23,6 +23,7 @@ interface SoilService {
         @Query("alertLow") alertLow: Int? = null,
         @Query("alertHigh") alertHigh: Int? = null,
         @Query("alerts") alerts: Int? = null,
+        @Query("name") name: String? = null,
         @Query("clearHistory") clearHistory: Int? = null
     ): ConfigResponse
 }

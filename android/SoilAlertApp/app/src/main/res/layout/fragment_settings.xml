@@ -181,6 +181,26 @@
                     android:text="@string/network_title"
                     android:textStyle="bold" />
 
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="@string/sensor_name_hint">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/sensorNameInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textCapWords" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <Button
+                    android:id="@+id/saveSensorNameButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/save_sensor_name" />
+
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

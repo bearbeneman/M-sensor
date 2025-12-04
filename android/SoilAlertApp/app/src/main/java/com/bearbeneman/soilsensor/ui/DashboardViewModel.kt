@@ -53,6 +53,7 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
                     _uiState.update {
                         it.copy(
                             status = ConnectionStatus.ONLINE,
+                            sensorName = response.name ?: it.sensorName,
                             moisture = response.moisture,
                             raw = response.raw,
                             lastUpdated = response.time,
@@ -134,6 +135,7 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
                         cooldownMs = response.cooldown,
                         wet = response.wet,
                         dry = response.dry,
+                        sensorName = response.name ?: it.sensorName,
                         alertLow = response.alertLow,
                         alertHigh = response.alertHigh,
                         alertsEnabled = response.alertsEnabled,
@@ -157,6 +159,7 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
                     it.copy(
                         wet = response.wet,
                         dry = response.dry,
+                        sensorName = response.name ?: it.sensorName,
                         alertLow = response.alertLow,
                         alertHigh = response.alertHigh,
                         alertsEnabled = response.alertsEnabled,
@@ -194,6 +197,7 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
                         wet = response.wet,
                         dry = response.dry,
                         cooldownMs = response.cooldown,
+                        sensorName = response.name ?: it.sensorName,
                         isApplyingConfig = false
                     )
                 }
@@ -201,6 +205,25 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
             }.onFailure { ex ->
                 _uiState.update { it.copy(isApplyingConfig = false) }
                 _events.emit(UiEvent.Message(ex.message ?: "Failed to save alert settings"))
+            }
+        }
+    }
+
+    fun updateSensorName(name: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isApplyingConfig = true) }
+            val result = repository.updateConfig(sensorName = name)
+            result.onSuccess { response ->
+                _uiState.update {
+                    it.copy(
+                        sensorName = response.name ?: name,
+                        isApplyingConfig = false
+                    )
+                }
+                _events.emit(UiEvent.Message("Sensor name updated"))
+            }.onFailure { ex ->
+                _uiState.update { it.copy(isApplyingConfig = false) }
+                _events.emit(UiEvent.Message(ex.message ?: "Failed to update sensor name"))
             }
         }
     }
@@ -253,6 +276,7 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
 data class DashboardUiState(
     val status: ConnectionStatus = ConnectionStatus.CONNECTING,
     val baseUrl: String = "",
+    val sensorName: String? = null,
     val moisture: Int? = null,
     val raw: Int? = null,
     val lastUpdated: String? = null,

@@ -124,6 +124,9 @@ class SettingsFragment : Fragment() {
         if (!baseUrlInput.isFocused && state.baseUrl.isNotBlank()) {
             baseUrlInput.setText(state.baseUrl)
         }
+        if (!sensorNameInput.isFocused) {
+            sensorNameInput.setText(state.sensorName ?: "")
+        }
 
         cooldownApplyButton.isEnabled = !state.isApplyingConfig
         saveCalibrationButton.isEnabled = !state.isApplyingConfig
@@ -203,6 +206,14 @@ class SettingsFragment : Fragment() {
             val url = baseUrlInput.text?.toString().orEmpty()
             if (url.isNotBlank()) {
                 viewModel.saveBaseUrl(url)
+            }
+        }
+        saveSensorNameButton.setOnClickListener {
+            val name = sensorNameInput.text?.toString()?.trim().orEmpty()
+            if (name.isBlank()) {
+                Snackbar.make(root, R.string.sensor_name_hint, Snackbar.LENGTH_SHORT).show()
+            } else {
+                viewModel.updateSensorName(name)
             }
         }
         openNotificationSettingsButton.setOnClickListener {

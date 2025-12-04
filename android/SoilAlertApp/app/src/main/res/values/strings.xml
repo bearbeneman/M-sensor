@@ -52,6 +52,8 @@
     <string name="discovered_devices">Discovered devices</string>
     <string name="scan_devices">Scan network</string>
     <string name="stop_scan_devices">Stop scanning</string>
+    <string name="sensor_name_hint">Sensor name</string>
+    <string name="save_sensor_name">Save name</string>
     <string name="device_manual_entry">Manual entry</string>
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_next">Next</string>

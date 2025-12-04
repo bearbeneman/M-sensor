@@ -72,6 +72,7 @@ class DashboardFragment : Fragment() {
             moistureValue.text = "--"
             moistureBar.progress = 0
         }
+        appTitle.text = state.sensorName ?: getString(com.bearbeneman.soilsensor.R.string.app_name)
         rawValue.text = getString(com.bearbeneman.soilsensor.R.string.raw_default, state.raw?.toString() ?: "--")
         timeValue.text = getString(com.bearbeneman.soilsensor.R.string.time_default, state.lastUpdated ?: "--")
         ipValue.text = getString(com.bearbeneman.soilsensor.R.string.ip_default, state.ip ?: "--")

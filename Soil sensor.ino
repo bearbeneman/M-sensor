@@ -55,6 +55,26 @@ uint32_t notifCooldownMs = NOTIF_COOLDOWN_DEFAULT_MS;
 int      alertLowThreshold  = ALERT_LOW_DEFAULT;
 int      alertHighThreshold = ALERT_HIGH_DEFAULT;
 bool     alertsEnabled      = true;
+String   sensorName         = "Soil Sensor";
+
+String jsonEscape(const String& input) {
+  String output;
+  output.reserve(input.length());
+  for (size_t i = 0; i < input.length(); ++i) {
+    char c = input[i];
+    switch (c) {
+      case '\"': output += "\\\""; break;
+      case '\\': output += "\\\\"; break;
+      case '\b': output += "\\b"; break;
+      case '\f': output += "\\f"; break;
+      case '\n': output += "\\n"; break;
+      case '\r': output += "\\r"; break;
+      case '\t': output += "\\t"; break;
+      default: output += c; break;
+    }
+  }
+  return output;
+}
 
 // Minute aggregation (downsample to 1 sample/minute)
 bool     minuteBucketValid = false;
@@ -1201,6 +1221,7 @@ void handleData() {
   updateSensorIfNeeded();
 
   String json = "{";
+  json += "\"name\":\""   + jsonEscape(sensorName) + "\",";
   json += "\"raw\":"      + String(lastRaw)      + ",";
   json += "\"moisture\":" + String(lastMoisture) + ",";
   json += "\"time\":\""   + getTimeString()      + "\",";
@@ -1292,6 +1313,16 @@ void handleConfig() {
     updated = true;
   }
 
+  if (server.hasArg("name")) {
+    String requested = server.arg("name");
+    requested.trim();
+    if (requested.length() > 0 && requested.length() <= 32) {
+      sensorName = requested;
+      prefs.putString("sensorName", sensorName);
+      updated = true;
+    }
+  }
+
   if (server.hasArg("clearHistory") && server.arg("clearHistory").toInt() != 0) {
     clearHistoryStorage();
     historyCleared = true;
@@ -1306,6 +1337,7 @@ void handleConfig() {
   json += ",\"alertHigh\":" + String(alertHighThreshold);
   json += ",\"alertsEnabled\":";
   json += (alertsEnabled ? "true" : "false");
+  json += ",\"name\":\"" + jsonEscape(sensorName) + "\"";
   json += ",\"historyCleared\":";
   json += (historyCleared ? "true" : "false");
   json += "}";
@@ -1341,6 +1373,7 @@ void setup() {
   wetValue = prefs.getInt("wet", WET_DEFAULT);
   dryValue = prefs.getInt("dry", DRY_DEFAULT);
   notifCooldownMs = prefs.getUInt("cooldown", NOTIF_COOLDOWN_DEFAULT_MS);
+  sensorName = prefs.getString("sensorName", "Soil Sensor");
   alertLowThreshold  = (int)prefs.getUInt("alertLow", ALERT_LOW_DEFAULT);
   alertHighThreshold = (int)prefs.getUInt("alertHigh", ALERT_HIGH_DEFAULT);
   alertsEnabled      = prefs.getBool("alertsEnabled", true);

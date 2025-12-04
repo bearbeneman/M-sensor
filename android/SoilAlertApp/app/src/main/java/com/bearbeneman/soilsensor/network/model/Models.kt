@@ -3,6 +3,7 @@ package com.bearbeneman.soilsensor.network.model
 import com.squareup.moshi.Json
 
 data class LiveDataResponse(
+    val name: String? = null,
     val raw: Int,
     val moisture: Int,
     val time: String,
@@ -35,6 +36,7 @@ data class ConfigResponse(
     @Json(name = "alertLow") val alertLow: Int,
     @Json(name = "alertHigh") val alertHigh: Int,
     @Json(name = "alertsEnabled") val alertsEnabled: Boolean,
+    val name: String? = null,
     @Json(name = "historyCleared") val historyCleared: Boolean? = null
 )
 

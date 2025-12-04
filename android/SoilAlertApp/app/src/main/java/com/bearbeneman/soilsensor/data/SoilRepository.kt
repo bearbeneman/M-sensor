@@ -76,6 +76,7 @@ class SoilRepository private constructor(context: Context) {
         alertLow: Int? = null,
         alertHigh: Int? = null,
         alertsEnabled: Boolean? = null,
+        sensorName: String? = null,
         clearHistory: Boolean = false
     ): Result<ConfigResponse> = runCatching {
         service.updateConfig(
@@ -86,6 +87,7 @@ class SoilRepository private constructor(context: Context) {
             alertLow = alertLow,
             alertHigh = alertHigh,
             alerts = alertsEnabled?.let { if (it) 1 else 0 },
+            name = sensorName,
             clearHistory = if (clearHistory) 1 else null
         )
     }
