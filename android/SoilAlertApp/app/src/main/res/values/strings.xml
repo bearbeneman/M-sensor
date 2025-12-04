@@ -45,5 +45,7 @@
     <string name="save_alert_settings">Save alert settings</string>
     <string name="alert_threshold_error">Thresholds must be 0-100 and low &lt; high</string>
     <string name="moisture_percent">%1$d%%</string>
+    <string name="tab_dashboard">Dashboard</string>
+    <string name="tab_settings">Settings</string>
 </resources>
 
