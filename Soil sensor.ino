@@ -56,6 +56,18 @@ int      alertLowThreshold  = ALERT_LOW_DEFAULT;
 int      alertHighThreshold = ALERT_HIGH_DEFAULT;
 bool     alertsEnabled      = true;
 
+void clearHistoryStorage() {
+  historyCount = 0;
+  historyIndex = 0;
+  minuteBucketValid = false;
+  minuteSamples = 0;
+  minuteAccum = 0;
+  minuteBucket = 0;
+  if (spiffsReady && SPIFFS.exists(HISTORY_FILE)) {
+    SPIFFS.remove(HISTORY_FILE);
+  }
+}
+
 // Minute aggregation (downsample to 1 sample/minute)
 bool     minuteBucketValid = false;
 uint32_t minuteBucket      = 0;
@@ -1224,6 +1236,7 @@ void handleHistory() {
 // Save calibration from query string (?wet=1234&dry=3456)
 void handleConfig() {
   bool updated = false;
+  bool historyCleared = false;
 
   if (server.hasArg("wet")) {
     int w = server.arg("wet").toInt();
@@ -1279,6 +1292,12 @@ void handleConfig() {
     updated = true;
   }
 
+  if (server.hasArg("clearHistory") && server.arg("clearHistory").toInt() != 0) {
+    clearHistoryStorage();
+    historyCleared = true;
+    updated = true;
+  }
+
   String json = "{\"ok\":";
   json += (updated ? "true" : "false");
   json += ",\"wet\":" + String(wetValue) + ",\"dry\":" + String(dryValue);
@@ -1287,6 +1306,8 @@ void handleConfig() {
   json += ",\"alertHigh\":" + String(alertHighThreshold);
   json += ",\"alertsEnabled\":";
   json += (alertsEnabled ? "true" : "false");
+  json += ",\"historyCleared\":";
+  json += (historyCleared ? "true" : "false");
   json += "}";
   server.send(200, "application/json", json);
 }

@@ -75,7 +75,8 @@ class SoilRepository private constructor(context: Context) {
         cooldownMs: Long? = null,
         alertLow: Int? = null,
         alertHigh: Int? = null,
-        alertsEnabled: Boolean? = null
+        alertsEnabled: Boolean? = null,
+        clearHistory: Boolean = false
     ): Result<ConfigResponse> = runCatching {
         service.updateConfig(
             resolveUrl(PATH_CONFIG),
@@ -84,7 +85,8 @@ class SoilRepository private constructor(context: Context) {
             cooldown = cooldownMs?.toInt(),
             alertLow = alertLow,
             alertHigh = alertHigh,
-            alerts = alertsEnabled?.let { if (it) 1 else 0 }
+            alerts = alertsEnabled?.let { if (it) 1 else 0 },
+            clearHistory = if (clearHistory) 1 else null
         )
     }
 

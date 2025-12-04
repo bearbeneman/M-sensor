@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.bearbeneman.soilsensor.data.SoilRepository
 import com.bearbeneman.soilsensor.network.model.HistoryPoint
+import java.util.ArrayDeque
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -26,6 +27,7 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
 
     private var liveJob: Job? = null
     private var historyJob: Job? = null
+    private val liveBuffer = ArrayDeque<LiveSample>()
 
     init {
         observeBaseUrl()
@@ -47,6 +49,7 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
             while (true) {
                 val result = repository.fetchLive()
                 result.onSuccess { response ->
+                    appendLiveSample(response.moisture)
                     _uiState.update {
                         it.copy(
                             status = ConnectionStatus.ONLINE,
@@ -61,6 +64,7 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
                             alertLow = response.alertLow,
                             alertHigh = response.alertHigh,
                             alertsEnabled = response.alertsEnabled,
+                            liveSamples = liveBuffer.toList(),
                             errorMessage = null
                         )
                     }
@@ -95,12 +99,17 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
         _uiState.update { it.copy(isHistoryLoading = true) }
         val result = repository.fetchHistory()
         result.onSuccess { response ->
-            val filtered = response.points
+            val sorted = response.points
                 .filter { it.timestamp > 0 }
                 .sortedBy { it.timestamp }
+            val trimmed = if (sorted.isNotEmpty()) {
+                val newest = sorted.last().timestamp
+                val cutoff = newest - HISTORY_WINDOW_SECONDS
+                sorted.filter { it.timestamp >= cutoff }
+            } else emptyList()
             _uiState.update {
                 it.copy(
-                    history = filtered,
+                    history = trimmed,
                     isHistoryLoading = false,
                     errorMessage = null
                 )
@@ -196,6 +205,28 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
         }
     }
 
+    fun clearHistory() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isApplyingConfig = true) }
+            val result = repository.updateConfig(clearHistory = true)
+            result.onSuccess {
+                liveBuffer.clear()
+                _uiState.update {
+                    it.copy(
+                        history = emptyList(),
+                        liveSamples = emptyList(),
+                        isHistoryLoading = false,
+                        isApplyingConfig = false
+                    )
+                }
+                _events.emit(UiEvent.Message("History cleared"))
+            }.onFailure { ex ->
+                _uiState.update { it.copy(isApplyingConfig = false) }
+                _events.emit(UiEvent.Message(ex.message ?: "Failed to clear history"))
+            }
+        }
+    }
+
     fun saveBaseUrl(url: String) {
         repository.updateBaseUrl(url)
         viewModelScope.launch {
@@ -206,6 +237,16 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
     private companion object {
         private const val POLL_INTERVAL_MS = 500L
         private const val HISTORY_INTERVAL_MS = 60_000L
+        private const val HISTORY_WINDOW_SECONDS = 10 * 24 * 60 * 60L
+        private const val LIVE_WINDOW_MS = 5 * 60 * 1000L
+    }
+
+    private fun appendLiveSample(moisture: Int) {
+        val now = System.currentTimeMillis()
+        liveBuffer.addLast(LiveSample(now, moisture))
+        while (liveBuffer.isNotEmpty() && now - liveBuffer.first().timestamp > LIVE_WINDOW_MS) {
+            liveBuffer.removeFirst()
+        }
     }
 }
 
@@ -223,6 +264,7 @@ data class DashboardUiState(
     val alertLow: Int? = null,
     val alertHigh: Int? = null,
     val alertsEnabled: Boolean = true,
+    val liveSamples: List<LiveSample> = emptyList(),
     val history: List<HistoryPoint> = emptyList(),
     val errorMessage: String? = null,
     val isHistoryLoading: Boolean = false,
@@ -234,6 +276,11 @@ enum class ConnectionStatus { CONNECTING, ONLINE, OFFLINE }
 sealed interface UiEvent {
     data class Message(val text: String) : UiEvent
 }
+
+data class LiveSample(
+    val timestamp: Long,
+    val moisture: Int
+)
 
 class DashboardViewModelFactory(
     private val repository: SoilRepository

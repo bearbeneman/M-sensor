@@ -26,6 +26,7 @@ import com.bearbeneman.soilsensor.ui.ConnectionStatus
 import com.bearbeneman.soilsensor.ui.DashboardUiState
 import com.bearbeneman.soilsensor.ui.DashboardViewModel
 import com.bearbeneman.soilsensor.ui.DashboardViewModelFactory
+import com.bearbeneman.soilsensor.ui.LiveSample
 import com.bearbeneman.soilsensor.ui.UiEvent
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.components.AxisBase
@@ -78,6 +79,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         setupChart(binding.historyChart)
+        setupLiveChart(binding.liveChart)
         setupCooldownSpinner()
         setupListeners()
         ensureNotificationPermission()
@@ -145,6 +147,9 @@ class MainActivity : AppCompatActivity() {
         }
         historyRefreshButton.setOnClickListener {
             viewModel.refreshHistoryOnce()
+        }
+        clearHistoryButton.setOnClickListener {
+            viewModel.clearHistory()
         }
         saveCalibrationButton.setOnClickListener {
             val wetValue = wetInput.text?.toString()?.toIntOrNull()
@@ -220,9 +225,8 @@ class MainActivity : AppCompatActivity() {
 
         updateStatus(state.status)
 
-        if (state.history.isNotEmpty()) {
-            updateChart(state.history)
-        }
+        updateChart(state.history)
+        updateLiveChart(state.liveSamples)
         historyLoading.visibility = if (state.isHistoryLoading) View.VISIBLE else View.GONE
 
         errorBanner.visibility = if (state.errorMessage != null) View.VISIBLE else View.GONE
@@ -278,14 +282,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateChart(points: List<HistoryPoint>) {
-        val filtered = points.filter { it.timestamp > 0 }
-        if (filtered.isEmpty()) {
+        if (points.isEmpty()) {
             binding.historyChart.clear()
             binding.historyChart.setNoDataText(getString(R.string.history_empty))
             return
         }
-        val firstTimestamp = filtered.first().timestamp
-        val entries = filtered.map { point ->
+        val firstTimestamp = points.first().timestamp
+        val entries = points.map { point ->
             val hours = (point.timestamp - firstTimestamp) / 3600f
             Entry(hours, point.moisture.toFloat())
         }
@@ -303,6 +306,58 @@ class MainActivity : AppCompatActivity() {
 
         binding.historyChart.data = LineData(dataSet)
         binding.historyChart.invalidate()
+    }
+
+    private fun setupLiveChart(chart: LineChart) {
+        chart.description.isEnabled = false
+        chart.legend.isEnabled = false
+        chart.setTouchEnabled(false)
+        chart.setPinchZoom(false)
+        chart.axisRight.isEnabled = false
+        chart.setNoDataText(getString(R.string.live_empty))
+        chart.setNoDataTextColor(Color.GRAY)
+
+        chart.xAxis.apply {
+            position = XAxis.XAxisPosition.BOTTOM
+            setDrawGridLines(false)
+            textColor = Color.GRAY
+            valueFormatter = object : ValueFormatter() {
+                override fun getAxisLabel(value: Float, axis: AxisBase?): String {
+                    return String.format("%.0fs", value)
+                }
+            }
+        }
+        chart.axisLeft.apply {
+            axisMinimum = 0f
+            axisMaximum = 100f
+            textColor = Color.GRAY
+            setDrawGridLines(true)
+            gridColor = Color.argb(80, 148, 163, 184)
+            setPosition(YAxis.YAxisLabelPosition.OUTSIDE_CHART)
+        }
+    }
+
+    private fun updateLiveChart(samples: List<LiveSample>) {
+        if (samples.isEmpty()) {
+            binding.liveChart.clear()
+            binding.liveChart.setNoDataText(getString(R.string.live_empty))
+            return
+        }
+        val first = samples.first().timestamp
+        val entries = samples.map {
+            val seconds = (it.timestamp - first) / 1000f
+            Entry(seconds, it.moisture.toFloat())
+        }
+        val dataSet = LineDataSet(entries, "Live").apply {
+            color = Color.parseColor("#0ea5e9")
+            lineWidth = 2f
+            setDrawCircles(false)
+            setDrawValues(false)
+            setDrawFilled(false)
+            mode = LineDataSet.Mode.LINEAR
+        }
+        binding.liveChart.data = LineData(dataSet)
+        binding.liveChart.invalidate()
     }
 
     private fun updateStatus(status: ConnectionStatus) {
