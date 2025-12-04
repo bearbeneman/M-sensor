@@ -56,18 +56,6 @@ int      alertLowThreshold  = ALERT_LOW_DEFAULT;
 int      alertHighThreshold = ALERT_HIGH_DEFAULT;
 bool     alertsEnabled      = true;
 
-void clearHistoryStorage() {
-  historyCount = 0;
-  historyIndex = 0;
-  minuteBucketValid = false;
-  minuteSamples = 0;
-  minuteAccum = 0;
-  minuteBucket = 0;
-  if (spiffsReady && SPIFFS.exists(HISTORY_FILE)) {
-    SPIFFS.remove(HISTORY_FILE);
-  }
-}
-
 // Minute aggregation (downsample to 1 sample/minute)
 bool     minuteBucketValid = false;
 uint32_t minuteBucket      = 0;
@@ -85,6 +73,18 @@ enum AlertState {
 
 AlertState lastRemoteAlertState = ALERT_NORMAL;
 unsigned long lastRemoteAlertMillis = 0;
+
+void clearHistoryStorage() {
+  historyCount = 0;
+  historyIndex = 0;
+  minuteBucketValid = false;
+  minuteSamples = 0;
+  minuteAccum = 0;
+  minuteBucket = 0;
+  if (spiffsReady && SPIFFS.exists(HISTORY_FILE)) {
+    SPIFFS.remove(HISTORY_FILE);
+  }
+}
 
 // ---------------- Live data globals ----------------
 int   lastRaw           = 0;

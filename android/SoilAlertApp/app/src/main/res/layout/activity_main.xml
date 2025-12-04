@@ -44,13 +44,15 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             app:cardCornerRadius="20dp"
-            app:cardElevation="6dp">
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@android:color/transparent">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp">
+                android:padding="24dp"
+                android:background="@drawable/bg_overview_card">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -85,7 +87,7 @@
                             android:id="@+id/statusText"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:textColor="#9ca3af"
+                        android:textColor="#d1d5db"
                             android:text="@string/status_connecting" />
                     </LinearLayout>
                 </LinearLayout>
@@ -107,44 +109,115 @@
                     android:layout_marginTop="16dp"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:id="@+id/rawValue"
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/raw_default"
-                        android:textColor="#9ca3af" />
+                        android:gravity="center_vertical"
+                        android:layout_marginTop="4dp">
 
-                    <TextView
-                        android:id="@+id/timeValue"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/time_default"
-                        android:textColor="#9ca3af"
-                        android:layout_marginTop="4dp" />
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_raw"
+                            android:contentDescription="@string/raw_default" />
 
-                    <TextView
-                        android:id="@+id/ipValue"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/ip_default"
-                        android:textColor="#9ca3af"
-                        android:layout_marginTop="4dp" />
+                        <TextView
+                            android:id="@+id/rawValue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="12dp"
+                            android:text="@string/raw_default"
+                            android:textColor="#e2e8f0" />
+                    </LinearLayout>
 
-                    <TextView
-                        android:id="@+id/calValue"
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/cal_default"
-                        android:textColor="#9ca3af"
-                        android:layout_marginTop="4dp" />
+                        android:gravity="center_vertical"
+                        android:layout_marginTop="8dp">
 
-                    <TextView
-                        android:id="@+id/intervalValue"
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_time"
+                            android:contentDescription="@string/time_default" />
+
+                        <TextView
+                            android:id="@+id/timeValue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="12dp"
+                            android:text="@string/time_default"
+                            android:textColor="#e2e8f0" />
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/interval_default"
-                        android:textColor="#9ca3af"
-                        android:layout_marginTop="4dp" />
+                        android:gravity="center_vertical"
+                        android:layout_marginTop="8dp">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_wifi_signal"
+                            android:contentDescription="@string/ip_default" />
+
+                        <TextView
+                            android:id="@+id/ipValue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="12dp"
+                            android:text="@string/ip_default"
+                            android:textColor="#e2e8f0" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:layout_marginTop="8dp">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_calibration"
+                            android:contentDescription="@string/cal_default" />
+
+                        <TextView
+                            android:id="@+id/calValue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="12dp"
+                            android:text="@string/cal_default"
+                            android:textColor="#e2e8f0" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:layout_marginTop="8dp">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_time"
+                            android:contentDescription="@string/interval_default" />
+
+                        <TextView
+                            android:id="@+id/intervalValue"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="12dp"
+                            android:text="@string/interval_default"
+                            android:textColor="#e2e8f0" />
+                    </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

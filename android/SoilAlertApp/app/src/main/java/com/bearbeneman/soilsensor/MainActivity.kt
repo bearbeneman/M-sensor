@@ -1,5 +1,6 @@
 package com.bearbeneman.soilsensor
 
+import android.animation.ValueAnimator
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -43,6 +44,8 @@ import kotlinx.coroutines.launch
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private var moistureAnimator: ValueAnimator? = null
+    private var lastMoistureValue: Int = 0
 
     private val viewModel: DashboardViewModel by viewModels {
         DashboardViewModelFactory(SoilRepository.getInstance(applicationContext))
@@ -210,8 +213,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderState(state: DashboardUiState) = with(binding) {
-        moistureValue.text = state.moisture?.let { "$it%" } ?: "--"
-        moistureBar.progress = state.moisture ?: 0
+        val targetMoisture = state.moisture
+        if (targetMoisture != null) {
+            animateMoistureChange(targetMoisture)
+        } else {
+            moistureAnimator?.cancel()
+            lastMoistureValue = 0
+            moistureValue.text = "--"
+            moistureBar.progress = 0
+        }
         rawValue.text = getString(R.string.raw_default, state.raw?.toString() ?: "--")
         timeValue.text = getString(R.string.time_default, state.lastUpdated ?: "--")
         ipValue.text = getString(R.string.ip_default, state.ip ?: "--")
@@ -358,6 +368,26 @@ class MainActivity : AppCompatActivity() {
         }
         binding.liveChart.data = LineData(dataSet)
         binding.liveChart.invalidate()
+    }
+
+    private fun animateMoistureChange(target: Int) {
+        if (target == lastMoistureValue && binding.moistureValue.text != "--") {
+            binding.moistureValue.text = getString(R.string.moisture_percent, target)
+            binding.moistureBar.progress = target
+            return
+        }
+        val start = lastMoistureValue
+        moistureAnimator?.cancel()
+        moistureAnimator = ValueAnimator.ofInt(start, target).apply {
+            duration = 600
+            addUpdateListener { animator ->
+                val value = animator.animatedValue as Int
+                binding.moistureValue.text = getString(R.string.moisture_percent, value)
+                binding.moistureBar.progress = value
+            }
+            start()
+        }
+        lastMoistureValue = target
     }
 
     private fun updateStatus(status: ConnectionStatus) {
