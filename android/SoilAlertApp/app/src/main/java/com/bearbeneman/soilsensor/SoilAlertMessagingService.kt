@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlin.random.Random
@@ -39,8 +40,7 @@ class SoilAlertMessagingService : FirebaseMessagingService() {
     }
 
     override fun onNewToken(token: String) {
-        // For topic-based messaging we don't need to send tokens to the backend.
-        // This hook is left for future expansion if per-device alerts are required.
+        FirebaseMessaging.getInstance().subscribeToTopic(MainActivity.TOPIC)
     }
 
     companion object {
