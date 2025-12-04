@@ -101,7 +101,11 @@ class MainActivity : AppCompatActivity() {
             textColor = Color.GRAY
             valueFormatter = object : ValueFormatter() {
                 override fun getAxisLabel(value: Float, axis: AxisBase?): String {
-                    return String.format("%.0fh", value / 60f)
+                        return if (value >= 24f) {
+                            String.format("%.0fd", value / 24f)
+                        } else {
+                            String.format("%.0fh", value)
+                        }
                 }
             }
         }
@@ -274,10 +278,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateChart(points: List<HistoryPoint>) {
-        val firstTimestamp = points.firstOrNull()?.timestamp ?: return
-        val entries = points.map { point ->
-            val minutes = (point.timestamp - firstTimestamp) / 60f
-            Entry(minutes, point.moisture.toFloat())
+        val filtered = points.filter { it.timestamp > 0 }
+        if (filtered.isEmpty()) {
+            binding.historyChart.clear()
+            binding.historyChart.setNoDataText(getString(R.string.history_empty))
+            return
+        }
+        val firstTimestamp = filtered.first().timestamp
+        val entries = filtered.map { point ->
+            val hours = (point.timestamp - firstTimestamp) / 3600f
+            Entry(hours, point.moisture.toFloat())
         }
 
         val dataSet = LineDataSet(entries, "Moisture").apply {

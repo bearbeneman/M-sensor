@@ -22,6 +22,7 @@
     <string name="interval_default">Interval: %1$s</string>
     <string name="history_title">10-day history</string>
     <string name="history_refresh">Refresh history</string>
+    <string name="history_empty">No history yet</string>
     <string name="alerts_title">Alerts</string>
     <string name="alerts_toggle_label">Enable push alerts</string>
     <string name="alerts_toggle_on">On</string>

@@ -95,9 +95,12 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
         _uiState.update { it.copy(isHistoryLoading = true) }
         val result = repository.fetchHistory()
         result.onSuccess { response ->
+            val filtered = response.points
+                .filter { it.timestamp > 0 }
+                .sortedBy { it.timestamp }
             _uiState.update {
                 it.copy(
-                    history = response.points,
+                    history = filtered,
                     isHistoryLoading = false,
                     errorMessage = null
                 )
