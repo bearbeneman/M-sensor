@@ -54,6 +54,9 @@
     <string name="stop_scan_devices">Stop scanning</string>
     <string name="sensor_name_hint">Sensor name</string>
     <string name="save_sensor_name">Save name</string>
+    <string name="current_sound">Current sound: %1$s</string>
+    <string name="choose_sound">Choose sound</string>
+    <string name="default_sound">Default</string>
     <string name="device_manual_entry">Manual entry</string>
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_next">Next</string>

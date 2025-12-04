@@ -1,7 +1,10 @@
 package com.bearbeneman.soilsensor.ui
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.media.RingtoneManager
+import android.net.Uri
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
@@ -14,12 +17,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.bearbeneman.soilsensor.R
+import com.bearbeneman.soilsensor.SoilAlertApp
+import com.bearbeneman.soilsensor.data.NotificationPrefs
 import com.bearbeneman.soilsensor.data.SoilRepositoryProvider
 import com.bearbeneman.soilsensor.databinding.FragmentSettingsBinding
 import com.google.android.material.snackbar.Snackbar
@@ -56,6 +62,14 @@ class SettingsFragment : Fragment() {
     private var multicastLock: WifiManager.MulticastLock? = null
     private var isScanning = false
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val soundPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uri: Uri? = result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            NotificationPrefs.setSoundUri(requireContext(), uri)
+            SoilAlertApp.createNotificationChannel(requireContext().applicationContext)
+            updateSoundLabel()
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -72,6 +86,7 @@ class SettingsFragment : Fragment() {
         setupDeviceSpinner()
         setupListeners()
         collectState()
+        updateSoundLabel()
     }
 
     override fun onDestroyView() {
@@ -229,6 +244,7 @@ class SettingsFragment : Fragment() {
                 startDeviceScan()
             }
         }
+        chooseSoundButton.setOnClickListener { openSoundPicker() }
     }
 
     private fun startDeviceScan() {
@@ -301,6 +317,23 @@ class SettingsFragment : Fragment() {
         deviceAdapter.clear()
         deviceAdapter.addAll(labels)
         deviceAdapter.notifyDataSetChanged()
+    }
+
+    private fun updateSoundLabel() {
+        val uri = NotificationPrefs.getSoundUri(requireContext())
+        val ringtone = RingtoneManager.getRingtone(requireContext(), uri)
+        val title = ringtone?.getTitle(requireContext()) ?: getString(R.string.default_sound)
+        binding.currentSoundLabel.text = getString(R.string.current_sound, title)
+    }
+
+    private fun openSoundPicker() {
+        val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, NotificationPrefs.getSoundUri(requireContext()))
+        }
+        soundPickerLauncher.launch(intent)
     }
 }
 
