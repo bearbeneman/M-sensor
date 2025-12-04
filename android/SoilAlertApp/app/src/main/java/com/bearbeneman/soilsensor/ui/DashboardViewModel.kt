@@ -132,8 +132,10 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
 
     private suspend fun fetchHistory() {
         _uiState.update { it.copy(isHistoryLoading = true) }
-        val result = repository.fetchHistory()
-        result.onSuccess { response ->
+        val localResult = repository.fetchHistoryLocal()
+        var usedRemote = false
+
+        localResult.onSuccess { response ->
             val sorted = response.points
                 .filter { it.timestamp > 0 }
                 .sortedBy { it.timestamp }
@@ -149,12 +151,36 @@ class DashboardViewModel(private val repository: SoilRepository) : ViewModel() {
                     errorMessage = null
                 )
             }
-        }.onFailure { ex ->
-            _uiState.update {
-                it.copy(
-                    isHistoryLoading = false,
-                    errorMessage = ex.message ?: "Failed to load history"
-                )
+        }.onFailure {
+            usedRemote = true
+        }
+
+        if (usedRemote) {
+            val remoteResult = repository.fetchHistoryRemote()
+            remoteResult.onSuccess { response ->
+                val sorted = response.points
+                    .filter { it.timestamp > 0 }
+                    .sortedBy { it.timestamp }
+                val trimmed = if (sorted.isNotEmpty()) {
+                    val newest = sorted.last().timestamp
+                    val cutoff = newest - HISTORY_WINDOW_SECONDS
+                    sorted.filter { it.timestamp >= cutoff }
+                } else emptyList()
+                _uiState.update {
+                    it.copy(
+                        history = trimmed,
+                        isHistoryLoading = false,
+                        errorMessage = null
+                    )
+                }
+            }.onFailure { ex ->
+                _uiState.update {
+                    it.copy(
+                        isHistoryLoading = false,
+                        errorMessage = ex.message
+                            ?: "Failed to load history from device or cloud"
+                    )
+                }
             }
         }
     }

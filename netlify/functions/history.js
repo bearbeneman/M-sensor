@@ -40,21 +40,12 @@ function initFirebase() {
   firebaseInitialized = true;
 }
 
+const HISTORY_WINDOW_SECONDS = 10 * 24 * 60 * 60; // 10 days
+const HISTORY_MAX_POINTS = 10 * 24 * 60; // 10 days * 24h * 60min
+
 exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
+  if (event.httpMethod !== 'GET') {
     return { statusCode: 405, body: 'Method Not Allowed' };
-  }
-
-  let payload = {};
-  try {
-    payload = JSON.parse(event.body || '{}');
-  } catch (err) {
-    return { statusCode: 400, body: 'Invalid JSON' };
-  }
-
-  const { secret, ...reading } = payload;
-  if (!secret || secret !== process.env.ALERT_SHARED_SECRET) {
-    return { statusCode: 401, body: 'Unauthorized' };
   }
 
   try {
@@ -73,44 +64,43 @@ exports.handler = async (event) => {
 
   try {
     const db = admin.firestore();
-    // TODO: support multiple devices via a deviceId field.
-    const docRef = db.collection('devices').doc('default');
+    const deviceId = 'default'; // placeholder for future multi-device support
 
-    await docRef.set(
-      {
-        ...reading,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    const nowSec = Math.floor(Date.now() / 1000);
+    const cutoff = nowSec - HISTORY_WINDOW_SECONDS;
 
-    // Also append to a rolling history collection for remote 10-day history views.
-    const historyCol = docRef.collection('history');
-    const moisture =
-      typeof reading.moisture === 'number' ? reading.moisture : 0;
-    const epoch =
-      typeof reading.epoch === 'number'
-        ? reading.epoch
-        : Math.floor(Date.now() / 1000);
+    const snap = await db
+      .collection('devices')
+      .doc(deviceId)
+      .collection('history')
+      .where('t', '>=', cutoff)
+      .orderBy('t', 'asc')
+      .limit(HISTORY_MAX_POINTS)
+      .get();
 
-    await historyCol.add({
-      t: epoch,
-      m: moisture,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    const points = [];
+    snap.forEach((doc) => {
+      const d = doc.data() || {};
+      if (typeof d.t === 'number' && typeof d.m === 'number') {
+        points.push({ t: d.t, m: d.m });
+      }
     });
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ ok: true }),
+      body: JSON.stringify({
+        maxPoints: HISTORY_MAX_POINTS,
+        points,
+      }),
     };
   } catch (err) {
-    console.error('Failed to persist reading', err);
+    console.error('Failed to read history', err);
     return {
       statusCode: 500,
       body: JSON.stringify({
         ok: false,
-        error: 'persist_failed',
-        message: err.message || 'Failed to persist reading',
+        error: 'history_read_failed',
+        message: err.message || 'Failed to read history',
       }),
     };
   }

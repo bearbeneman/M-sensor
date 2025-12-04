@@ -1390,6 +1390,10 @@ void sendCloudReading() {
   }
 
   // Build JSON payload mirroring /data response plus secret for auth.
+  time_t nowEpoch;
+  time(&nowEpoch);
+  uint32_t t32 = (nowEpoch > 0) ? (uint32_t)nowEpoch : 0;
+
   String payload = "{";
   payload += "\"secret\":\"";
   payload += ALERT_SHARED_KEY;
@@ -1398,6 +1402,7 @@ void sendCloudReading() {
   payload += "\"raw\":" + String(lastRaw) + ",";
   payload += "\"moisture\":" + String(lastMoisture) + ",";
   payload += "\"time\":\"" + getTimeString() + "\",";
+  payload += "\"epoch\":" + String(t32) + ",";
   payload += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
   payload += "\"wet\":" + String(wetValue) + ",";
   payload += "\"dry\":" + String(dryValue) + ",";

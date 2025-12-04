@@ -30,5 +30,9 @@ interface SoilService {
     // Remote (cloud) latest reading, backed by Netlify/Firebase.
     @GET(".netlify/functions/latest")
     suspend fun fetchLatestRemote(): LiveDataResponse
+
+    // Remote (cloud) history over approximately 10 days.
+    @GET(".netlify/functions/history")
+    suspend fun fetchRemoteHistory(): HistoryResponse
 }
 

@@ -77,8 +77,12 @@ class SoilRepository private constructor(context: Context) {
         remoteService.fetchLatestRemote()
     }
 
-    suspend fun fetchHistory(): Result<HistoryResponse> = runCatching {
+    suspend fun fetchHistoryLocal(): Result<HistoryResponse> = runCatching {
         service.fetchHistory(resolveUrl(PATH_HISTORY))
+    }
+
+    suspend fun fetchHistoryRemote(): Result<HistoryResponse> = runCatching {
+        remoteService.fetchRemoteHistory()
     }
 
     suspend fun updateConfig(
