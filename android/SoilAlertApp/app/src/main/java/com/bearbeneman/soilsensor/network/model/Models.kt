@@ -35,6 +35,6 @@ data class ConfigResponse(
     @Json(name = "alertLow") val alertLow: Int,
     @Json(name = "alertHigh") val alertHigh: Int,
     @Json(name = "alertsEnabled") val alertsEnabled: Boolean,
-    @Json(name = "historyCleared") val historyCleared: Boolean
+    @Json(name = "historyCleared") val historyCleared: Boolean? = null
 )
 
