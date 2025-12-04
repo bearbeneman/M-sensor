@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.bearbeneman.soilsensor.notifications.AlertActionReceiver
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -27,6 +28,18 @@ class SoilAlertMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val notificationId = Random.nextInt()
+
+        val ackIntent = PendingIntent.getBroadcast(
+            this,
+            notificationId,
+            Intent(this, AlertActionReceiver::class.java).apply {
+                action = AlertActionReceiver.ACTION_ACK
+                putExtra(AlertActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -34,9 +47,15 @@ class SoilAlertMessagingService : FirebaseMessagingService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .addAction(
+                0,
+                getString(R.string.acknowledge_alert),
+                ackIntent
+            )
             .build()
 
-        NotificationManagerCompat.from(this).notify(Random.nextInt(), notification)
+        NotificationManagerCompat.from(this).notify(notificationId, notification)
     }
 
     override fun onNewToken(token: String) {

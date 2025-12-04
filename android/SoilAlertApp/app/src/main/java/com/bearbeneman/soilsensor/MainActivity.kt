@@ -1,6 +1,7 @@
 package com.bearbeneman.soilsensor
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -10,8 +11,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.adapter.FragmentStateAdapter
+import com.bearbeneman.soilsensor.data.OnboardingPrefs
 import com.bearbeneman.soilsensor.data.SoilRepositoryProvider
 import com.bearbeneman.soilsensor.databinding.ActivityMainBinding
+import com.bearbeneman.soilsensor.onboarding.OnboardingActivity
 import com.bearbeneman.soilsensor.ui.DashboardFragment
 import com.bearbeneman.soilsensor.ui.DashboardViewModel
 import com.bearbeneman.soilsensor.ui.DashboardViewModelFactory
@@ -41,6 +44,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (!OnboardingPrefs.isCompleted(this)) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            finish()
+            return
+        }
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 

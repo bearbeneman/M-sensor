@@ -100,8 +100,11 @@ class DashboardFragment : Fragment() {
     private fun setupChart(chart: LineChart) {
         chart.description.isEnabled = false
         chart.legend.isEnabled = false
-        chart.setTouchEnabled(false)
-        chart.setPinchZoom(false)
+        chart.setTouchEnabled(true)
+        chart.setDragEnabled(true)
+        chart.setScaleEnabled(true)
+        chart.setPinchZoom(true)
+        chart.isScaleYEnabled = false
         chart.axisRight.isEnabled = false
         chart.setNoDataText(getString(com.bearbeneman.soilsensor.R.string.history_empty))
         chart.setNoDataTextColor(Color.GRAY)
@@ -133,8 +136,11 @@ class DashboardFragment : Fragment() {
     private fun setupLiveChart(chart: LineChart) {
         chart.description.isEnabled = false
         chart.legend.isEnabled = false
-        chart.setTouchEnabled(false)
-        chart.setPinchZoom(false)
+        chart.setTouchEnabled(true)
+        chart.setDragEnabled(true)
+        chart.setScaleEnabled(true)
+        chart.setPinchZoom(true)
+        chart.isScaleYEnabled = false
         chart.axisRight.isEnabled = false
         chart.setNoDataText(getString(com.bearbeneman.soilsensor.R.string.live_empty))
         chart.setNoDataTextColor(Color.GRAY)

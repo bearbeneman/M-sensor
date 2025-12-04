@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <application
         android:name=".SoilAlertApp"
@@ -23,6 +24,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".onboarding.OnboardingActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Material3.Dark.NoActionBar" />
+
         <service
             android:name=".SoilAlertMessagingService"
             android:exported="false">
@@ -30,6 +36,14 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <receiver
+            android:name=".notifications.AlertActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.bearbeneman.soilsensor.ACTION_ACK_ALERT" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".boot.BootReceiver"

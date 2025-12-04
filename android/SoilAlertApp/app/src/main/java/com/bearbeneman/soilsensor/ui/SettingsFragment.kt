@@ -1,7 +1,13 @@
 package com.bearbeneman.soilsensor.ui
 
+import android.content.Context
 import android.content.Intent
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
@@ -13,10 +19,10 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.google.android.material.snackbar.Snackbar
 import com.bearbeneman.soilsensor.R
 import com.bearbeneman.soilsensor.data.SoilRepositoryProvider
 import com.bearbeneman.soilsensor.databinding.FragmentSettingsBinding
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.launch
 
 class SettingsFragment : Fragment() {
@@ -42,6 +48,15 @@ class SettingsFragment : Fragment() {
     private var selectedCooldownMs = cooldownOptions.first().first
     private var suppressCooldownListener = false
 
+    private data class DeviceEntry(val label: String, val host: String)
+    private val deviceEntries = mutableListOf<DeviceEntry>()
+    private lateinit var deviceAdapter: ArrayAdapter<String>
+    private var nsdManager: NsdManager? = null
+    private var discoveryListener: NsdManager.DiscoveryListener? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
+    private var isScanning = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -54,8 +69,20 @@ class SettingsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupCooldownSpinner()
+        setupDeviceSpinner()
         setupListeners()
         collectState()
+    }
+
+    override fun onDestroyView() {
+        stopDeviceScan()
+        _binding = null
+        super.onDestroyView()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        stopDeviceScan()
     }
 
     private fun collectState() {
@@ -124,6 +151,30 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    private fun setupDeviceSpinner() = with(binding) {
+        deviceAdapter = ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_item,
+            mutableListOf(getString(R.string.device_manual_entry))
+        )
+        deviceAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        deviceSpinner.adapter = deviceAdapter
+        deviceSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long
+            ) {
+                if (position == 0) return
+                val entry = deviceEntries.getOrNull(position - 1) ?: return
+                baseUrlInput.setText("http://${entry.host}/")
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+    }
+
     private fun setupListeners() = with(binding) {
         cooldownApplyButton.setOnClickListener {
             viewModel.applyCooldown(selectedCooldownMs)
@@ -160,11 +211,85 @@ class SettingsFragment : Fragment() {
             }
             startActivity(intent)
         }
+        scanDevicesButton.setOnClickListener {
+            if (isScanning) {
+                stopDeviceScan()
+            } else {
+                startDeviceScan()
+            }
+        }
     }
 
-    override fun onDestroyView() {
-        _binding = null
-        super.onDestroyView()
+    private fun startDeviceScan() {
+        if (isScanning) return
+        isScanning = true
+        binding.deviceScanProgress.visibility = View.VISIBLE
+        binding.scanDevicesButton.text = getString(R.string.stop_scan_devices)
+        deviceEntries.clear()
+        updateDeviceSpinner()
+
+        val wifiManager = requireContext().applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        multicastLock = wifiManager.createMulticastLock("soil-mdns").apply {
+            setReferenceCounted(true)
+            acquire()
+        }
+
+        nsdManager = requireContext().getSystemService(Context.NSD_SERVICE) as NsdManager
+        discoveryListener = createDiscoveryListener()
+        nsdManager?.discoverServices("_http._tcp.", NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+
+        mainHandler.postDelayed({ stopDeviceScan() }, 15_000L)
+    }
+
+    private fun stopDeviceScan() {
+        if (!isScanning) return
+        isScanning = false
+        binding.deviceScanProgress.visibility = View.GONE
+        binding.scanDevicesButton.text = getString(R.string.scan_devices)
+        discoveryListener?.let { nsdManager?.stopServiceDiscovery(it) }
+        discoveryListener = null
+        multicastLock?.let { if (it.isHeld) it.release() }
+        multicastLock = null
+    }
+
+    private fun createDiscoveryListener(): NsdManager.DiscoveryListener =
+        object : NsdManager.DiscoveryListener {
+            override fun onStartDiscoveryFailed(serviceType: String?, errorCode: Int) {
+                stopDeviceScan()
+            }
+
+            override fun onStopDiscoveryFailed(serviceType: String?, errorCode: Int) {
+                stopDeviceScan()
+            }
+
+            override fun onDiscoveryStarted(serviceType: String?) {}
+            override fun onDiscoveryStopped(serviceType: String?) {}
+
+            override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+                nsdManager?.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                    override fun onResolveFailed(serviceInfo: NsdServiceInfo?, errorCode: Int) {}
+                    override fun onServiceResolved(resolvedInfo: NsdServiceInfo) {
+                        val host = resolvedInfo.host?.hostAddress ?: return
+                        val name = resolvedInfo.serviceName ?: host
+                        mainHandler.post {
+                            if (deviceEntries.none { it.host == host }) {
+                                deviceEntries.add(DeviceEntry(name, host))
+                                updateDeviceSpinner()
+                            }
+                        }
+                    }
+                })
+            }
+
+            override fun onServiceLost(serviceInfo: NsdServiceInfo) {}
+        }
+
+    private fun updateDeviceSpinner() {
+        val labels = mutableListOf(getString(R.string.device_manual_entry))
+        labels.addAll(deviceEntries.map { "${it.label} (${it.host})" })
+        deviceAdapter.clear()
+        deviceAdapter.addAll(labels)
+        deviceAdapter.notifyDataSetChanged()
     }
 }
 
